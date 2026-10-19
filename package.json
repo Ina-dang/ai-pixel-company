@@ -1,0 +1,38 @@
+{
+  "name": "ai-pixel-company",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.15.1",
+  "engines": { "node": ">=22.20.0 <23" },
+  "scripts": {
+    "setup:local": "node scripts/setup-local.mjs",
+    "db:up": "docker compose --env-file .local/compose.env up -d --wait",
+    "db:down": "docker compose --env-file .local/compose.env down",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:test:prepare": "tsx scripts/prepare-test-db.ts",
+    "dev": "node scripts/dev.mjs",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck && tsc --noEmit -p tsconfig.tests.json",
+    "test": "tsx scripts/run-tests.ts",
+    "browsers:install": "node scripts/playwright.mjs install chromium",
+    "test:e2e": "node scripts/playwright.mjs test",
+    "build": "turbo run build",
+    "verify:contracts": "pnpm --filter @ai-pixel/contracts contracts:check",
+    "verify": "pnpm lint && pnpm typecheck && pnpm verify:contracts && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.64.1",
+    "@types/node": "22.18.6",
+    "@node-rs/argon2": "2.2.2",
+    "@ai-pixel/contracts": "workspace:*",
+    "@ai-pixel/db": "workspace:*",
+    "postgres": "3.4.9",
+    "tsx": "4.23.15",
+    "turbo": "2.11.9",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "number", "const": 1 },
+    "operationId": { "type": "string", "format": "uuid" },
+    "workflowRunId": { "type": "string", "format": "uuid" },
+    "taskId": { "type": "string", "format": "uuid" },
+    "leaseToken": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$", "maxLength": 19, "x-bigint-max": "9223372036854775807" },
+    "checkpointThreadId": { "type": "string", "minLength": 1 },
+    "specRef": { "type": "string", "minLength": 1 },
+    "profileRefs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "policyRef": { "type": "string", "minLength": 1 }
+  },
+  "required": ["schemaVersion", "operationId", "workflowRunId", "taskId", "leaseToken", "checkpointThreadId", "specRef", "profileRefs", "policyRef"],
+  "additionalProperties": false
+}

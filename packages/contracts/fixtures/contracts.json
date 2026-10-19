@@ -1,0 +1,27 @@
+{
+  "execution": {
+    "schemaVersion": 1,
+    "operationId": "10000000-0000-4000-8000-000000000001",
+    "workflowRunId": "10000000-0000-4000-8000-000000000002",
+    "taskId": "10000000-0000-4000-8000-000000000003",
+    "leaseToken": "9007199254740993",
+    "checkpointThreadId": "workflow:fixture:1",
+    "specRef": "spec:fixture:1",
+    "profileRefs": ["profile:pm:1"],
+    "policyRef": "policy:fixture:1"
+  },
+  "event": {
+    "schemaVersion": 1,
+    "eventId": "20000000-0000-4000-8000-000000000001",
+    "organizationId": "11111111-1111-4111-8111-111111111111",
+    "projectId": "20000000-0000-4000-8000-000000000002",
+    "taskId": "10000000-0000-4000-8000-000000000003",
+    "runId": null,
+    "agentId": null,
+    "sequence": "9007199254740993",
+    "timestamp": "2026-10-19T00:00:00.000Z",
+    "type": "task.created",
+    "aggregateVersion": 1,
+    "payload": { "title": "한국어 원문 보존 검증", "status": "TODO", "version": 1 }
+  }
+}
