@@ -168,6 +168,38 @@ label { display: block; font-size: 12px; font-weight: 650; color: #50576b; }
 .login-footnote { text-align: center; color: #6e7486; font-size: 10px; line-height: 1.9; padding-top: 22px; margin: 23px 0 0; border-top: 1px solid #eeeff4; }
 .login-bottom { font-size: 10px; color: #a2abc2; margin: 25px 0 0; }
 
+.subscription-panel { align-items: flex-start; }
+.subscription-panel > div { min-width: 0; flex: 1; }
+.quota-windows { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #59648b; margin-top: 9px; }
+.stop-reason { overflow-wrap: anywhere; color: #9b3331; }
+.workflow-panel { padding: 24px; margin-bottom: 24px; min-width: 0; }
+.workflow-panel > .muted { font-size: 12px; }
+.workflow-actions, .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0; }
+.run-meta { border-top: 1px solid var(--border); padding-top: 18px; font-size: 11px; color: #6e7486; }
+.run-identifier, .run-sha, .candidate-evidence, .role-result { overflow-wrap: anywhere; }
+.run-blocked { padding: 13px 16px; border: 1px solid #e7d5ad; border-radius: 7px; background: #fffaed; color: #765b28; font-size: 12px; overflow-wrap: anywhere; }
+.role-evidence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 22px 0; }
+.role-evidence { border: 1px solid var(--border); border-radius: 8px; padding: 16px; min-width: 0; }
+.workflow-panel h3 { font-size: 13px; margin: 0 0 12px; }
+.role-result { font-size: 12px; }
+.role-result + .role-result { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; }
+.workflow-panel details { font-size: 12px; }
+.workflow-panel summary { cursor: pointer; color: var(--primary); padding: 6px 0; font-weight: 600; }
+.workflow-panel details .original-command { font-size: 11px; }
+.candidate-evidence, .verification-evidence, .usage-evidence { border-top: 1px solid var(--border); padding-top: 18px; margin: 18px 0; }
+.run-sha { color: #6e7486; font-size: 11px; }
+.evidence-output { max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 6px; background: #f5f5fa; color: #3d455e; padding: 14px; font: 11px/1.7 "Cascadia Mono", Consolas, monospace; }
+.verification-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.verification-grid details { min-width: 0; }
+.usage-evidence { font-size: 11px; overflow-wrap: anywhere; }
+.acceptance-box { padding: 18px; background: #f7f6ff; border: 1px solid #dcd6f6; border-radius: 8px; font-size: 12px; }
+.acceptance-check { display: flex; align-items: flex-start; gap: 9px; margin: 15px 0; overflow-wrap: anywhere; }
+.acceptance-check input { width: 16px; height: 16px; margin-top: 3px; flex-shrink: 0; }
+.acceptance-check span { min-width: 0; }
+.past-runs { margin-top: 18px; overflow-wrap: anywhere; }
+@media (max-width: 960px) { .role-evidence-grid { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .workflow-panel { padding: 20px; } .verification-grid { grid-template-columns: 1fr; } .subscription-panel > .text-button { white-space: normal; max-width: 50px; padding-left: 0; } .workflow-actions { align-items: stretch; } .workflow-actions .button { flex: 1; } .acceptance-box { padding: 13px; } }
+
 @media (min-width: 1600px) { .main-content { padding-top: 46px; } .work-grid { grid-template-columns: 1.2fr 1fr; } }
 @media (max-width: 1190px) { .sidebar { width: 205px; flex-basis: 205px; padding-left: 14px; padding-right: 14px; } .topbar { padding: 0 26px; } .main-content { padding: 30px 26px 20px; } .project-form { grid-template-columns: 1fr 1.5fr; } .summary-grid { gap: 12px; } .summary-card { padding: 17px 16px; } .summary-card > small { font-size: 9px; } .tasks-panel, .task-form-panel, .detail-panel, .activity-panel { padding: 20px; } .work-grid { gap: 16px; } .connection-card > strong { font-size: 11px; } }
 @media (max-width: 960px) { .sidebar { width: 190px; flex-basis: 190px; } .summary-grid { grid-template-columns: repeat(2, 1fr); } .work-grid { grid-template-columns: 1fr; } .tasks-panel .empty-state { min-height: 220px; } .connection-card > strong { margin-top: 20px; margin-bottom: 15px; } .engine-notice .subtle-tag { display: none; } .project-bar { gap: 20px; padding: 15px; } .project-bar select { min-width: 180px; } .repository-meta { padding-left: 20px; } .detail-grid { grid-template-columns: 1fr; gap: 25px; } .page-footer { flex-direction: column; gap: 4px; } }

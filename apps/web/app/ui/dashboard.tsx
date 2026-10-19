@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   api, allProjects, ApiError, errorMessage, eventLabels, formatTime,
-  type CompanyEvent, type Project, type Session, type Snapshot, type Task, type TaskDetail,
+  type CompanyEvent, type Project, type RoleEvidence, type Session, type Snapshot, type SubscriptionState, type Task, type TaskDetail, type WorkflowRun,
 } from "./api";
 
 type Submission = { body: string; key: string } | null;
@@ -124,7 +124,7 @@ export function Dashboard() {
       <div className="workspace-label">WORKSPACE</div>
       <div className="organization-name">{session.organization.name}</div>
       <nav><a className="nav-link active" href="#main-content" aria-current="page"><span aria-hidden="true">▦</span> 회사 대시보드</a></nav>
-      <div className="sidebar-note"><span className="tiny-square" aria-hidden="true" /><strong>기반을 만드는 중</strong><p>프로젝트와 업무를 준비하고<br />변경 이력을 확인하세요.</p><span className="phase-pill">PHASE 0 · FOUNDATION</span></div>
+      <div className="sidebar-note"><span className="tiny-square" aria-hidden="true" /><strong>근거와 함께 일하는 직원</strong><p>계획, 코드, 검증 결과를<br />확인하고 수락하세요.</p><span className="phase-pill">PHASE 1 · AGENTS</span></div>
       <div className="owner-profile"><span className="avatar" aria-hidden="true">O</span><div><strong>{session.user.displayName}</strong><small>Owner · 로컬 세션</small></div><button className="logout" type="button" onClick={() => void logout()} disabled={busy}>로그아웃</button></div>
     </aside>
     <div className="content-shell">
@@ -203,6 +203,28 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadingError, setLoadingError] = useState("");
   const reloadRef = useRef<(() => Promise<Snapshot | undefined>) | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
+  const [subscriptionError, setSubscriptionError] = useState("");
+  const checkSubscriptionRef = useRef<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let loading = false;
+    const check = async () => {
+      if (loading || controller.signal.aborted) return;
+      loading = true;
+      try {
+        const loaded = await api<SubscriptionState>("/subscription", { signal: controller.signal });
+        if (!controller.signal.aborted) { setSubscription(loaded); setSubscriptionError(""); }
+      } catch (failure) {
+        if (!controller.signal.aborted) { setSubscription(null); setSubscriptionError(errorMessage(failure)); onError(failure); }
+      } finally { loading = false; }
+    };
+    checkSubscriptionRef.current = check;
+    void check();
+    const timer = window.setInterval(() => void check(), 10000);
+    return () => { controller.abort(); window.clearInterval(timer); checkSubscriptionRef.current = null; };
+  }, [onError]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -247,7 +269,7 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
             if (!controller.signal.aborted && failure instanceof ApiError && failure.status === 401) { connected.close(); onError(failure); }
           }).finally(() => { probing = false; });
       };
-      for (const type of ["task.created", "project.created", "task.updated", "task.status.changed"]) connected.addEventListener(type, receive as EventListener);
+      for (const type of ["task.created", "project.created", "task.updated", "task.status.changed", "workflow.run.created", "workflow.run.updated", "agent.completed", "approval.requested", "approval.resolved"]) connected.addEventListener(type, receive as EventListener);
       connected.onmessage = receive;
       connected.addEventListener("stream.auth-error", () => {
         connected.close();
@@ -284,11 +306,11 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
   return <>
     <section className="summary-grid" aria-label="프로젝트 현황">
       <SummaryCard label="등록된 업무" value={snapshot ? String(tasks.length) : "—"} suffix="건" caption="서버에 저장된 전체 업무" />
-      <SummaryCard label="실행 중인 직원" value="—" caption="실행 엔진 연결 전" subdued />
+      <SummaryCard label="직원 실행 방식" value="Codex" caption="PM → Developer → QA · 순차 실행" subdued />
       <SummaryCard label="승인 대기" value={snapshot ? String(snapshot.approvals.length) : "—"} suffix="건" caption="Owner 확인이 필요한 요청" />
       <div className="summary-card connection-card"><span>서버 동기화</span><strong className={connection === "실시간 연결됨" ? "connection-good" : "connection-pending"}><i aria-hidden="true" />{connection}</strong><small role="status" aria-live="polite">{snapshot ? `마지막 동기화 커서 ${snapshot.cursor}` : "서버 상태를 불러오고 있습니다."}</small></div>
     </section>
-    <section className="engine-notice" aria-labelledby="engine-title"><span className="engine-icon" aria-hidden="true">▧</span><div><h2 id="engine-title">아직 실행 엔진이 연결되지 않았습니다</h2><p>지금은 업무 등록과 상태 이력 확인이 가능합니다. AI 직원 실행은 다음 단계에서 연결됩니다.</p></div><span className="subtle-tag">준비 단계</span></section>
+    <section className="engine-notice subscription-panel" aria-labelledby="engine-title"><span className="engine-icon" aria-hidden="true">▧</span><div><h2 id="engine-title">Codex 구독 · {subscription?.ready ? "실행 가능" : subscription ? "실행 중단 조건" : "상태 확인 중"}</h2><p>기존 구독의 포함 한도를 공유합니다. API 키 대체 경로 없이 한도에서 중단하고, 재개는 직접 요청합니다.</p>{subscription?.reason && <p className="stop-reason" role="status">중단 사유: {subscription.reason}</p>}{subscriptionError && <p role="status">구독 상태를 확인하지 못했습니다. 실행은 비활성화됩니다.</p>}{subscription && <div className="quota-windows">{subscription.windows.map((window, index) => <span key={`${window.windowDurationMins}:${window.resetsAt}`}>한도 {index + 1}: 사용 {window.usedPercent}%{window.resetsAt ? ` · 초기화 ${formatTime(new Date(window.resetsAt * 1000).toISOString())} KST` : " · 초기화 시각 미제공"}</span>)}<small>인증: {subscription.authMode} · 확인 {formatTime(subscription.checkedAt)} KST</small></div>}</div><button className="text-button" type="button" onClick={() => void checkSubscriptionRef.current?.()}>한도 확인</button></section>
     {loadingError && <div className="error-with-retry"><ErrorNotice message={loadingError} /><button className="button secondary" type="button" onClick={() => window.location.reload()}>연결 다시 시도</button></div>}
     <div className="work-grid">
       <section className="panel tasks-panel" aria-labelledby="task-list-title">
@@ -298,12 +320,121 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
       <TaskForm projectId={project.id} session={session} onError={onError} onCreated={async task => { await reloadRef.current?.(); setSelectedTaskId(task.id); setRefreshKey(current => current + 1); }} />
     </div>
     {activeTask && <TaskDetailPanel key={`${activeTask.id}:${activeTask.version}:${refreshKey}`} task={activeTask} onError={onError} onClose={() => setSelectedTaskId("")} />}
+    {activeTask && <WorkflowPanel key={activeTask.id} task={activeTask} session={session} subscription={subscription} refreshKey={refreshKey} onError={onError} onChanged={() => { void reloadRef.current?.(); void checkSubscriptionRef.current?.(); }} />}
     <section className="panel activity-panel" aria-labelledby="event-log-title"><div className="section-heading"><div><span className="eyebrow">ACTIVITY</span><h2 id="event-log-title">실시간 변경 기록</h2></div><span className="muted small">현재 연결에서 받은 최근 알림</span></div>{events.length === 0 ? <p className="inline-empty">아직 수신한 변경 알림이 없습니다. 업무의 저장 이력은 업무 상세에서 확인할 수 있습니다.</p> : <ol className="event-list">{events.map(entry => <li key={entry.eventId}><span className="event-dot" aria-hidden="true" /><strong>{eventLabels[entry.type] ?? entry.type}</strong><code>#{entry.sequence}</code><time dateTime={entry.timestamp}>{formatTime(entry.timestamp)} KST</time></li>)}</ol>}</section>
   </>;
 }
 
 function SummaryCard({ label, value, suffix, caption, subdued }: { label: string; value: string; suffix?: string; caption: string; subdued?: boolean }) {
   return <div className="summary-card"><span>{label}</span><strong className={subdued ? "muted" : ""}>{value}<small className="summary-suffix">{suffix}</small></strong><small>{caption}</small></div>;
+}
+
+const runStatusLabels: Record<WorkflowRun["status"], string> = {
+  QUEUED: "실행 대기", RUNNING: "실행 중", PAUSED: "일시 정지", BLOCKED: "차단됨",
+  WAITING_APPROVAL: "결과 수락 대기", SUCCEEDED: "실행 성공", FAILED: "실행 실패", CANCELLED: "취소됨",
+};
+
+function WorkflowPanel({ task, session, subscription, refreshKey, onError, onChanged }: {
+  task: Task; session: Session; subscription: SubscriptionState | null; refreshKey: number;
+  onError: (error: unknown) => void; onChanged: () => void;
+}) {
+  const [runs, setRuns] = useState<WorkflowRun[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState("");
+  const [acceptSha, setAcceptSha] = useState("");
+  const submission = useRef<Submission>(null);
+  const refresh = useRef<(() => Promise<void>) | null>(null);
+  const alive = useRef(true);
+  const observedRefresh = useRef(refreshKey);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    alive.current = true;
+    let pending = false;
+    const load = async () => {
+      if (pending || controller.signal.aborted) return;
+      pending = true;
+      try {
+        const result = await api<{ items: WorkflowRun[] }>(`/tasks/${encodeURIComponent(task.id)}/runs`, { signal: controller.signal });
+        if (!controller.signal.aborted) { setRuns(result.items); setLoaded(true); setFailure(""); }
+      } catch (error) {
+        if (!controller.signal.aborted) { setFailure(errorMessage(error)); onError(error); }
+      } finally { pending = false; }
+    };
+    refresh.current = load;
+    void load();
+    const timer = window.setInterval(() => void load(), 2500);
+    return () => { alive.current = false; controller.abort(); window.clearInterval(timer); refresh.current = null; };
+  }, [task.id, onError]);
+
+  useEffect(() => {
+    if (observedRefresh.current === refreshKey) return;
+    observedRefresh.current = refreshKey;
+    void refresh.current?.();
+  }, [refreshKey]);
+
+  const latest = runs[0];
+  const terminal = latest && ["SUCCEEDED", "FAILED", "CANCELLED"].includes(latest.status);
+  const workspace = latest?.checkpoint.workspace;
+  const verification = latest?.checkpoint.verification;
+  const pm = latest?.checkpoint.roles.filter(role => role.role === "PM").at(-1);
+  const developer = latest?.checkpoint.roles.filter(role => role.role === "DEVELOPER").at(-1);
+  const qa = latest?.checkpoint.roles.filter(role => role.role === "QA").at(-1);
+  const matchingEvidence = !!workspace && !!workspace.diff.trim() && workspace.files.length > 0 && !latest?.checkpoint.activeTurnId
+    && verification?.sha === workspace.sha && verification.test.exitCode === 0 && verification.build.exitCode === 0
+    && verification.sandbox.networkDisabled && verification.sandbox.readOnlyRoot && verification.sandbox.resourceLimited
+    && !!pm?.output.specEn.trim() && pm.output.acceptanceCriteria.length > 0
+    && developer?.candidateSha === workspace.sha && developer.output.files.length > 0
+    && qa?.output.verdict === "PASS" && qa.candidateSha === workspace.sha && qa.output.candidateSha === workspace.sha && qa.output.issues.length === 0;
+  const canResume = latest && !latest.stopping && (latest.resumable ?? (["PAUSED", "BLOCKED"].includes(latest.status) && !latest.checkpoint.activeTurnId && !latest.checkpoint.activeThreadId && latest.checkpoint.stopReason !== "RECOVERY_REQUIRED"));
+
+  async function mutate(path: string, value: unknown) {
+    if (busy) return;
+    setBusy(true); setFailure("");
+    try {
+      const result = await api<WorkflowRun>(path, submissionOptions(value, submission), session.csrfToken);
+      submission.current = null;
+      if (!alive.current) return;
+      setRuns(current => [result, ...current.filter(run => run.id !== result.id)]);
+      setLoaded(true); setAcceptSha(""); onChanged();
+      await refresh.current?.();
+    } catch (error) {
+      if (alive.current) { setFailure(errorMessage(error)); onError(error); }
+    } finally { if (alive.current) setBusy(false); }
+  }
+
+  return <section className="panel workflow-panel" aria-labelledby="workflow-title">
+    <div className="section-heading"><div><span className="eyebrow">SUBSCRIPTION WORKFLOW</span><h2 id="workflow-title">AI 직원 실행</h2></div><span className="subtle-tag">PM → Developer → QA</span></div>
+    <p className="muted">Phase 1 검증 범위: 격리된 <code>node-functions-v1</code> 함수 라이브러리. 직원이 코드를 수정하면 샌드박스에서 테스트·빌드를 실행하고 같은 SHA를 QA가 검토합니다. 연결 저장소의 임의 코드는 실행하지 않습니다.</p>
+    <ErrorNotice message={failure} />
+    {!loaded && !failure && <p role="status">실행 기록을 불러오는 중입니다…</p>}
+    {loaded && (!latest || terminal) && <div className="workflow-actions"><button type="button" className="button primary" disabled={busy || !subscription?.ready || !["TODO", "FAILED"].includes(task.status)} onClick={() => void mutate(`/tasks/${encodeURIComponent(task.id)}/runs`, { fixture: "node-functions-v1" })}>{busy ? "실행 요청 중…" : "검증 업무 실행"}</button><span className="muted small">구독 상태와 서버 실행 조건을 통과해야 시작합니다.</span></div>}
+    {latest && <>
+      <div className="run-meta"><span className="status-badge">실행: {runStatusLabels[latest.status]}</span><span>현재 단계: {latest.checkpoint.stage}</span><span>업무: {task.statusLabelKo}</span><span>실행 버전 {latest.version}</span></div>
+      <p className="muted small run-identifier">실행 ID <code>{latest.id}</code> · {formatTime(latest.updatedAt)} KST</p>
+      {latest.checkpoint.stopReason && <p className="run-blocked" role="status">중단 사유: <code>{latest.checkpoint.stopReason}</code><br />조건을 해결한 후 한도를 확인하고 직접 재개해 주세요. 자동 재시도나 API 키 대체 실행은 하지 않습니다.</p>}
+      {latest.stopping && <p role="status" className="muted small">진행 중인 직원 작업의 중단 확인을 기다리고 있습니다.</p>}
+      {!terminal && latest.status !== "WAITING_APPROVAL" && <div className="workflow-actions">
+        {["QUEUED", "RUNNING"].includes(latest.status) && <button className="button secondary" type="button" disabled={busy} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "pause", expectedVersion: latest.version })}>일시 정지 요청</button>}
+        {canResume && <button className="button primary" type="button" disabled={busy || !subscription?.ready} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "resume", expectedVersion: latest.version })}>실행 재개</button>}
+      </div>}
+      {!terminal && <div className="workflow-actions"><button className="button secondary" type="button" disabled={busy} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "cancel", expectedVersion: latest.version })}>실행 취소</button></div>}
+      <div className="role-evidence-grid">{(["PM", "DEVELOPER", "QA"] as const).map(role => {
+        const entries = latest.checkpoint.roles.filter(entry => entry.role === role);
+        return <article className="role-evidence" key={role}><h3>{role === "DEVELOPER" ? "Developer" : role}</h3>{entries.length ? entries.map(entry => <RoleResult key={`${entry.threadId}:${entry.turnId}`} evidence={entry} />) : <p className="muted small">완료된 결과 없음</p>}</article>;
+      })}</div>
+      {workspace && <div className="candidate-evidence"><h3>코드 변경 근거</h3><p className="run-sha">후보 SHA <code>{workspace.sha}</code></p><p className="small">Developer 제출 파일: {latest.checkpoint.roles.filter(role => role.role === "DEVELOPER").at(-1)?.output.files.map(file => file.path).join(", ") || "기록 없음"}</p><details><summary>후보 diff 확인</summary><pre className="evidence-output">{workspace.diff || "diff 없음"}</pre></details></div>}
+      {verification && <div className="verification-evidence"><h3>실제 실행 검증</h3><p className="run-sha">검증 SHA <code>{verification.sha}</code> · {formatTime(verification.verifiedAt)} KST</p><div className="verification-grid">{(["test", "build"] as const).map(kind => <details key={kind} open={verification[kind].exitCode !== 0}><summary>{kind === "test" ? "테스트" : "빌드"} 종료 코드: {verification[kind].exitCode}</summary><pre className="evidence-output">{verification[kind].output || "출력 없음"}</pre></details>)}</div><p className="muted small">네트워크 차단: {verification.sandbox.networkDisabled ? "검증됨" : "미검증"} · 루트 읽기 전용: {verification.sandbox.readOnlyRoot ? "검증됨" : "미검증"} · 자원 제한: {verification.sandbox.resourceLimited ? "검증됨" : "미검증"}</p></div>}
+      <p className="usage-evidence">구독 사용 기록 · 입력 {latest.checkpoint.usage.inputTokens.toLocaleString("ko-KR")} / 캐시 입력 {latest.checkpoint.usage.cachedInputTokens.toLocaleString("ko-KR")} / 출력 {latest.checkpoint.usage.outputTokens.toLocaleString("ko-KR")} 토큰 · 모델 호출 {latest.checkpoint.turns}회 · 재작업 {latest.checkpoint.rework}회<br /><span className="muted">토큰 수를 API 요금으로 환산하지 않습니다.</span></p>
+      {latest.status === "WAITING_APPROVAL" && <div className="acceptance-box"><h3>Owner 결과 수락</h3><p>위 코드 변경과 테스트·빌드·QA 결과를 검토하고 표시된 후보 SHA를 수락합니다. 서버가 근거와 최신 버전을 다시 확인합니다.</p>{!matchingEvidence && <p role="status">동일 SHA의 테스트·빌드·QA PASS 근거가 부족하여 수락할 수 없습니다.</p>}<label className="acceptance-check"><input type="checkbox" checked={!!workspace && acceptSha === workspace.sha} disabled={!matchingEvidence || busy} onChange={event => setAcceptSha(event.target.checked ? workspace?.sha ?? "" : "")} /><span>후보 SHA <code>{workspace?.sha ?? "없음"}</code>의 결과를 확인했습니다.</span></label><button type="button" className="button primary" disabled={busy || !matchingEvidence || acceptSha !== workspace?.sha} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/accept`, { candidateSha: workspace?.sha, expectedVersion: latest.version })}>표시한 SHA 결과 수락</button></div>}
+      {runs.length > 1 && <details className="past-runs"><summary>이전 실행 {runs.length - 1}건</summary><ul>{runs.slice(1).map(run => <li key={run.id}><code>{run.id}</code> · {runStatusLabels[run.status]} · {formatTime(run.updatedAt)} KST</li>)}</ul></details>}
+    </>}
+  </section>;
+}
+
+function RoleResult({ evidence }: { evidence: RoleEvidence }) {
+  return <div className="role-result"><p>{evidence.output.summaryKo}</p><p className="muted small">판정: {evidence.output.verdict} · {formatTime(evidence.completedAt)} KST</p>{evidence.candidateSha && <p className="run-sha"><code>{evidence.candidateSha}</code></p>}<details><summary>인계 명세·수용 기준</summary><p className="original-command">{evidence.output.specEn}</p><ul className="criteria-list">{evidence.output.acceptanceCriteria.map(criterion => <li key={criterion.id}><code>{criterion.id}</code><span>{criterion.description}</span></li>)}</ul>{evidence.output.issues.length > 0 && <ul>{evidence.output.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}<p className="muted small run-identifier">스레드 <code>{evidence.threadId}</code><br />턴 <code>{evidence.turnId}</code></p></details></div>;
 }
 
 function TaskForm({ projectId, session, onCreated, onError }: { projectId: string; session: Session; onCreated: (task: Task) => Promise<void>; onError: (error: unknown) => void }) {
@@ -322,7 +453,7 @@ function TaskForm({ projectId, session, onCreated, onError }: { projectId: strin
     try {
       const task = await api<Task>(`/projects/${encodeURIComponent(projectId)}/tasks`, submissionOptions({ title, commandOriginalKo: command, source: "TEXT", priority: "MEDIUM", acceptanceCriteria }, submission), session.csrfToken);
       submission.current = null;
-      setTitle(""); setCommand(""); setCriteria(""); setNotice("업무를 등록했습니다. 실행 엔진 연결 전까지 대기합니다.");
+      setTitle(""); setCommand(""); setCriteria(""); setNotice("업무를 등록했습니다. 업무 상세에서 실행 범위를 확인해 주세요.");
       await onCreated(task);
     } catch (failure) { onError(failure); }
     finally { setBusy(false); }

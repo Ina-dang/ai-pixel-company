@@ -67,7 +67,7 @@ export const taskSchema = z.strictObject({
   priority: taskPrioritySchema, status: taskStatusSchema, statusLabelKo: z.string(), blockedReason: z.string().nullable(),
   version: versionSchema, createdBy: idSchema, createdAt: dateSchema, updatedAt: dateSchema, latestRunId: idSchema.nullable(),
 });
-export const eventTypes = ["project.created", "project.updated", "task.created", "task.updated", "task.status.changed"] as const;
+export const eventTypes = ["project.created", "project.updated", "task.created", "task.updated", "task.status.changed", "workflow.run.created", "workflow.run.updated", "agent.completed", "approval.requested", "approval.resolved"] as const;
 export const eventEnvelopeSchema = z.strictObject({
   schemaVersion: z.literal(schemaVersion), eventId: idSchema, organizationId: idSchema, projectId: idSchema.nullable(),
   runId: idSchema.nullable(), taskId: idSchema.nullable(), agentId: idSchema.nullable(), sequence: sequenceSchema,

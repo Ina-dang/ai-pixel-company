@@ -1,5 +1,13 @@
 # 기술 검증과 선택
 
+## Phase 1 검증 업데이트 — 2026-10-19
+
+기존 npm 설치 Codex CLI0.162.1의 ChatGPT 인증·app-server account/rateLimits 조회·exec JSON/구조화 출력·엄격 설정을 실제 검증했다. 셸/앱/플러그인/이미지/브라우저/다중 에이전트 도구를 비활성화하고 모델 결과 파일은 별도 broker가 반영한다. 최신 문서의 일부 키(tools.view_image)가 이 버전에서 미인식되어 features.view_image=false로 수정하고 strict-config로 조용한 무시를 막았다. 공식 설정/프로토콜은 변경될 수 있으므로 CLI 갱신 시 재검증한다.
+
+Sandbox는 공식 node:22.20.0-alpine@sha256:dbcedd8aeab47fbc0f4dd4bffa55b7c3c729a707875968d467aaaea42d6225af를 사용한다. 로컬 Docker nonroot/read-only/network-none/seccomp/cgroup 부정시험·timeout/cancel 정리와 실제 fixture 테스트/빌드를 검증했다. 운영 보안·임의 저장소 격리를 보증하지 않는다. Redis/BullMQ/Python LangGraph 도입은 [ADR-011](17-decision-log.md)로 현재 경로에서 대체했다.
+
+공식 근거: [인증](https://learn.chatgpt.com/docs/auth), [app-server](https://learn.chatgpt.com/docs/app-server), [설정](https://learn.chatgpt.com/docs/config-file/config-reference). 열람 2026-10-19, 개별 변경일 미공개.
+
 ## Phase 0 검증 업데이트 — 2026-10-19
 
 실제 실행 조합: Node 22.20.0 / pnpm 10.15.1 / Python 3.12.4 / PostgreSQL 18.6 / Docker Engine 29.7.2·Compose 5.4.0. 패키지는 Next 16.4.2, React 19.3.1, Hono 4.13.13·Node adapter 2.1.5, Zod 4.6.7, Drizzle ORM 0.45.4, postgres.js 3.4.9, Turbo 2.11.9, TypeScript 5.9.3, Vitest 5.0.5, Playwright 1.64.1, Biome 2.5.15로 lock했다. 각 major의 최신 패치 전체를 보장하는 표가 아니라 이번에 실행한 조합이다.

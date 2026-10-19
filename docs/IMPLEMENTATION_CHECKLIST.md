@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-Phase 0 인증·DB/API·SSE·한국어 대시보드를 구현했다. 실제 테스트27개, Chromium E2E1개, TS16/Python26 fixture, lint/typecheck/build/audit가 통과했다. DB 컨테이너 재시작 후 데이터/cursor 유지도 확인했다. 실행 명령/환경은 README에 있다. provider 호출·외부 App 설치/메시지·merge·운영 배포는 수행하지 않았다.
+Phase 0 기반과 Phase 1 구독 전용 제한 fixture 경로를 구현했다. 실제 Codex PM/Developer/QA, 파일 수정·Docker test/build·동일 SHA QA를 확인했다. 자동 시험69개·Chromium5개와 TS16/Python26 계약 fixture를 검증한다. 세부 실제 결과·한계·실행 명령은 README를 따른다. 언어 비교/범용 저장소는 미실행이다. 외부 App 설치/메시지·merge·운영 배포·API 키 호출은 수행하지 않았다.
 
 ## Phase 0 — Foundation
 
@@ -24,18 +24,18 @@ Phase 0 인증·DB/API·SSE·한국어 대시보드를 구현했다. 실제 테�
 
 ## Phase 1 — AI Agent Core
 
-- [ ] P1-01 BullMQ/outbox→Node dispatcher→Python HTTP·operation 조회·lease fencing(T04/T08).
-- [ ] P1-02 영구 checkpoint/thread_id·pause/cancel/resume·승인 중 재시작(T08/T18).
-- [ ] P1-03 PM/Developer/QA 프로필·영어 명세/AC/Artifact 인계(T06/T21).
-- [ ] P1-04 Sandbox 파일/네트워크/명령/리소스/secret 차단·고아 프로세스 종료(T10). 실패/미실행 시 비신뢰 실행 차단.
-- [ ] P1-05 fixture 실제 코드 수정·test/build·같은 SHA QA·결과 수락(T06).
-- [ ] P1-06 실패/검증 불가·재작업 2회·최대 3 candidate·상한 종료(T01/T07).
-- [ ] P1-07 고위험 action 승인 scope/단일 소비·권한 철회·stale SHA(T09).
-- [ ] P1-08 토큰/시간/retry·가격 snapshot·예약/UNKNOWN 정산·상한(T02/T11).
+- [x] P1-01 ADR-011로 PG 영구 큐→Node Codex worker 대체. concurrent claim·lease fencing 실증. Redis/Python HTTP 미도입.
+- [x] P1-02 JSON checkpoint/실제 thread ID·pause/cancel/stop ack·수동 resume·만료 lease fail-closed 복구. 별도 provider turnId는 미노출로 null.
+- [x] P1-03 PM/Developer/QA 역할·영어 명세/AC/파일/검증 인계, 실제 Codex 3역할 성공.
+- [x] P1-04 소유 fixture 한정 파일/네트워크/명령/resource/secret 부정시험·timeout/cancel 종료. 임의 저장소 실행 차단.
+- [x] P1-05 실제 src/math.mjs 변경·컨테이너 test/build0·동일 manifest SHA256 QA PASS. 수락 API gate/단일 소비는 실제 PG 시험, 실제 모델 결과는 Owner 수락 대기.
+- [x] P1-06 실패/검증 불가·재작업 2회·최대 3 candidate/7호출·중단/복구 회귀 시험.
+- [x] P1-07 결과 수락 scope·single-use·철회/stale SHA 차단. 고위험 merge/deploy/payment action은 미노출/차단.
+- [x] P1-08 구독 인증 강제·API/구매 fallback 없음·유료 크레딧/한도 불명/90% 차단·실행 중 재확인·시간/turn/완료토큰 차단선. 금액 ledger는 ADR-011로 현재 비적용.
 - [ ] P1-09 동일 과제 한국어/영어 품질/비용/시간·표본/한계 비교(T12).
-- [ ] P1-10 결과물/로그/SHA/검증/승인/비용의 한국어 추적 보고.
+- [x] P1-10 결과 파일/diff/manifest SHA256/test/build/QA/수락/완료된 응답 토큰·구독 모드의 한국어 UI·SSE 보고.
 
-완료 gate: 자연어 task로 실제 수정·test/build·QA·제한 재작업·중단/복구·승인·계측을 끝까지 입증한다. 원격 PR은 Phase 3 gate다.
+현재 판정: 제한 fixture 핵심 경로 통과. 단위/통합69개, Chromium5개 및 실제 구독 PM→Developer→QA 성공을 확인한다. P1-09 언어 비교는 미실행이며 전체 Phase 1 완료로 표시하지 않는다. 범용 저장소는 현재 허용하지 않는다. 원격 PR은 Phase 3 gate다. 실행별 실제 사용량/승인 상태는 DB와 UI가 기준이다.
 
 ## Phase 2 — Pixel Office / B 출시
 
@@ -114,4 +114,4 @@ Critical(현재 설계 착수를 막는 문서 결함)은 자체 검토에서 �
 
 **Phase 0 완료**. 2026-10-19 실제 테스트·브라우저 검증으로 기반 gate를 통과했다. D07의 Phase0 버전/설치 불확실성은 ADR-010으로 해소했다. D06(Sandbox 실차단)은 Phase1의 실행 차단 조건으로 유지한다. Phase1은 provider/예산·격리 검증을 전제로 CONDITIONAL GO다.
 
-다음 우선순위: Phase1 범위 확인 → provider/모델/예산 → Redis/dispatcher↔Python → checkpoint/lease → 비밀 없는 fixture Sandbox 부정 시험 → PM/Dev/QA 실제 실행. 운영 배포와 merge는 별도 승인한다.
+현재 이력 보충(2026-10-19): 위 최초 착수 경로는 ADR-011로 대체했다. 구독/PG checkpoint/lease/제한 Sandbox/PM·Dev·QA 핵심 검증을 완료했다. 다음 우선순위는 실제 결과 Owner 수락, 언어 비교 실험의 필요성 판단, 범용 저장소 격리·의존성 정책, Phase 2 픽셀 사무실이다. 운영 배포와 merge는 별도 승인한다.

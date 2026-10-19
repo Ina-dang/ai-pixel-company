@@ -9,6 +9,7 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-pixel/agents": "workspace:*",
     "@ai-pixel/contracts": "workspace:*",
     "@ai-pixel/db": "workspace:*",
     "@hono/node-server": "2.1.5",

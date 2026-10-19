@@ -1,24 +1,32 @@
 import { createDatabase, migrateDatabase } from '@ai-pixel/db';
+import { CodexSubscriptionProvider, DockerSandbox, WorkflowRunner } from '@ai-pixel/agents';
+import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { loadRuntime } from '../../../scripts/runtime.js';
 import { createApp, initializeOwner } from './app.js';
+import { WorkflowRepository } from './workflows.js';
 
 const runtime = loadRuntime();
 const database = createDatabase(runtime.databaseUrl);
 await migrateDatabase(database);
 await initializeOwner(database);
-const app = createApp({ database, config: {
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const provider = new CodexSubscriptionProvider(root);
+const runner = new WorkflowRunner(new WorkflowRepository(database), provider, new DockerSandbox(`${root}/.local/agent-workspaces`));
+const app = createApp({ database, workflowProvider: provider, config: {
   ...runtime, sessionTtlSeconds: 28_800, cookieSecure: new URL(runtime.appOrigin).protocol === 'https:',
   ssePollMs: 1000, sseHeartbeatMs: 15_000, sseBatchSize: 1000, sseRetentionDays: 30,
   loginMaxAttempts: 10, loginWindowMs: 60_000,
 } });
 const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: Number(process.env.API_PORT ?? 3001) });
-console.log('AI Pixel API: http://127.0.0.1:3001 (Phase 0, local only)');
+await runner.start();
+console.log('AI Pixel API: http://127.0.0.1:3001 (Codex subscription workers, local only)');
 let stopping = false;
 async function stop() {
   if (stopping) return;
   stopping = true;
   server.close();
+  await runner.stop();
   await database.close();
   process.exit(0);
 }

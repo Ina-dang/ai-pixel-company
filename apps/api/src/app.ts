@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { AgentProvider } from '@ai-pixel/agents';
 import {
   createProjectSchema, createTaskSchema, idSchema, loginSchema,
   patchProjectSchema, patchTaskSchema, sequenceSchema,
@@ -20,6 +21,7 @@ import {
   type ApiConfig, type ApiEnv, ApiError, authenticate, checkCsrf,
   checkOrigin, csrfToken, digest, randomToken,
 } from './security.js';
+import { workflowRoutes } from './workflow-routes.js';
 
 export { initializeOwner, transitionTaskForVerification } from './repository.js';
 export type { ApiConfig } from './security.js';
@@ -72,7 +74,7 @@ function nextPage(row: { id: string; cursor_time: string } | undefined) {
   return row ? Buffer.from(JSON.stringify({ id: row.id, createdAt: row.cursor_time })).toString('base64url') : null;
 }
 
-export function createApp({ database, config }: { database: Database; config: ApiConfig }) {
+export function createApp({ database, config, workflowProvider }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider }) {
   const app = new Hono<ApiEnv>();
   const loginAttempts: number[] = [];
   const cookieOptions = {
@@ -102,7 +104,8 @@ export function createApp({ database, config }: { database: Database; config: Ap
   app.notFound((c) => c.json({ error: { code: 'NOT_FOUND', messageKo: '경로를 찾을 수 없습니다.', retryable: false }, requestId: c.get('requestId') }, 404));
   app.get('/health', async (c) => {
     await database.sql`select 1`;
-    return c.json({ status: 'ok', phase: 0, agentEngineConnected: false });
+    return c.json({ status: 'ok', phase: workflowProvider ? 1 : 0,
+      agentWorkerConfigured: Boolean(workflowProvider), subscriptionReadiness: '/api/v1/subscription' });
   });
 
   app.post('/api/v1/auth/session', async (c) => {
@@ -156,6 +159,7 @@ export function createApp({ database, config }: { database: Database; config: Ap
       organization: { id: auth.organizationId, name: auth.organizationName }, csrfToken: csrfToken(c),
     }, requestId: c.get('requestId') });
   });
+  app.route('/api/v1', workflowRoutes(database, workflowProvider));
   app.delete('/api/v1/auth/session', async (c) => {
     const auth = c.get('auth');
     await database.sql.begin(async (tx) => {

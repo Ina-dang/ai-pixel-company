@@ -51,6 +51,62 @@ export type Snapshot = {
 
 export type TaskDetail = Task & { events: CompanyEvent[] };
 
+export type SubscriptionState = {
+  ready: boolean;
+  reason: string | null;
+  authMode: "chatgpt" | "unknown";
+  billingMode: "CHATGPT_SUBSCRIPTION";
+  windows: { usedPercent: number; resetsAt: number | null; windowDurationMins: number | null }[];
+  checkedAt: string;
+};
+
+export type RoleEvidence = {
+  role: "PM" | "DEVELOPER" | "QA";
+  threadId: string;
+  turnId: string;
+  candidateSha: string | null;
+  completedAt: string;
+  usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number };
+  output: {
+    summaryKo: string;
+    specEn: string;
+    acceptanceCriteria: { id: string; description: string }[];
+    files: { path: string; content: string }[];
+    verdict: "PASS" | "FAIL" | "NA";
+    candidateSha: string;
+    issues: string[];
+  };
+};
+
+export type WorkflowRun = {
+  id: string;
+  taskId: string;
+  status: "QUEUED" | "RUNNING" | "PAUSED" | "BLOCKED" | "WAITING_APPROVAL" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  checkpoint: {
+    stage: "PM" | "DEVELOPER" | "VERIFY" | "QA";
+    rework: number;
+    turns: number;
+    stopReason: string | null;
+    activeTurnId: string | null;
+    activeThreadId: string | null;
+    usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number };
+    roles: RoleEvidence[];
+    workspace: { files: { path: string; content: string }[]; sha: string; diff: string } | null;
+    verification: {
+      sha: string;
+      test: { exitCode: number; output: string };
+      build: { exitCode: number; output: string };
+      sandbox: { networkDisabled: boolean; readOnlyRoot: boolean; resourceLimited: boolean };
+      verifiedAt: string;
+    } | null;
+  };
+  stopping?: boolean;
+  resumable?: boolean;
+};
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public requestId?: string) {
     super(message);
@@ -133,4 +189,9 @@ export const eventLabels: Record<string, string> = {
   "task.created": "업무 등록",
   "task.updated": "업무 수정",
   "task.status.changed": "업무 상태 변경",
+  "workflow.run.created": "AI 실행 등록",
+  "workflow.run.updated": "AI 실행 상태 변경",
+  "agent.completed": "직원 작업 결과 기록",
+  "approval.requested": "결과 수락 요청",
+  "approval.resolved": "결과 수락 처리",
 };

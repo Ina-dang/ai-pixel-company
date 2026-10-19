@@ -1,6 +1,6 @@
 # 문서 목차
 
-최신성 체크: 2026-10-19. Phase 0 구현·로컬 검증을 완료했다. 아래 문서는 전체 단계 설계이며 Phase 1~5 기능은 미구현이다. 실제 결과와 실행 절차는 README·IMPLEMENTATION_CHECKLIST를 따른다.
+최신성 체크: 2026-10-19. Phase 0 및 Phase 1의 Codex 구독 기반 제한 fixture 핵심 경로를 구현·검증했다. 현재 구성은 ADR-011을 따르며 아래 전체 확장 설계와 구분한다. 언어 비교·범용 저장소·Phase 2~5는 미구현/미검증이다. 실제 결과와 실행 절차는 README·IMPLEMENTATION_CHECKLIST를 따른다.
 
 | 파일 | 목적 | 상태 |
 |---|---|---|

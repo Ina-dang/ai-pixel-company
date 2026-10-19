@@ -1,5 +1,9 @@
 # 시스템 아키텍처
 
+## Phase 1 구현 보충 — 2026-10-19
+
+현재 로컬 구독 실행은 [ADR-011](17-decision-log.md)의 PostgreSQL 영구 큐→Node WorkflowRunner→공식 Codex CLI PM/Developer/QA→Docker broker 경로다. 아래 Redis/BullMQ·Python LangGraph HTTP 그림은 최초 확장 설계이며 현재 실행 구성과 구분한다. 추가 API 공급자 과금 경로는 구현하지 않는다. DB 상태/lease/승인 권한, 역할별 증거와 Sandbox 책임은 유지한다. 범용 저장소 실행은 미지원이다.
+
 ## 1. 목적
 
 실행 엔진의 정확성과 격리를 확보하면서 1인 개발에 맞는 최소 프로세스 경계를 정한다.

@@ -92,6 +92,19 @@
 - 영향: 실제 DB/API 테스트27개, Chromium E2E1개, TS16/Python26 fixture, lint/typecheck/build/audit를 실행했다. 모든 결과는 README에 기록한다.
 - 한계: 공개 서비스 인증·LangGraph·Redis·Sandbox·provider 과금·운영 배포 검증은 범위 밖이다. Phase 1 진입 시 각각 재검증한다.
 
+## ADR-011 — 기존 Codex 구독을 사용하는 제한된 Phase 1 실행
+
+- 날짜/상태: 2026-10-19 / 사용자 구현·검증·push 승인, 고정 fixture 실제 실행 검증.
+- 대상/배경: 사용자는 추가 API 비용 없이 현재 Codex 구독을 사용하고 한도 도달 시 중단할 것을 명시했다.
+- 대안: 유료 API/LangGraph adapter, 비공식 토큰 추출, 공식 Codex CLI 연결. 공식 ChatGPT 로그인 CLI를 선택하며 인증 토큰을 직접 추출하지 않는다.
+- 대체 관계: 최초 Phase 1 Redis·BullMQ→Python LangGraph HTTP 구성을 단일 로컬 Node worker + PostgreSQL 영구 큐/JSON checkpoint로 대체한다. API 금액 예약·가격 snapshot은 이 구독 전용 경로에 적용하지 않는다. 다중 공급자/분산 운영 도입 시 별도 ADR이 필요하다.
+- 책임 유지: Hono/DB가 인증·상태·승인·lease fencing을 결정한다. worker가 PM/Developer/QA와 제한 재작업을 수행하고 Sandbox broker가 파일 적용·명령 실행을 담당한다. Codex 자체에 호스트 실행 도구를 주지 않는다.
+- 인증/비용: forced_login_method=chatgpt, 기본 공급자 고정, API/DB/proxy 비밀 환경변수 제외, exec --ignore-user-config --strict-config 및 셸/앱/플러그인/브라우저/이미지 도구 비활성화. app-server는 인증과 rateLimits 조회에만 사용한다. 유료 크레딧·한도 불명·90% 이상·quota 오류는 중단한다. 구매·충전·banked reset·API fallback은 호출하지 않는다.
+- 내구성/중단: PG claim·60초 lease·heartbeat·영구 checkpoint·단일 수락 기록. pause/cancel은 lease를 폐기하고 실제 teardown 확인 후 stop token을 단일 소비한다. 종료 불명은 worker 전체 및 DB 큐를 막고 로컬 interlock도 보존한다. 알 수 없는 진행 중 호출은 재시작 후 자동 replay하지 않는다.
+- 결과/증거: PM 영어 명세/AC, Developer 구조화 파일을 broker가 실제 수정, 네트워크 없는 nonroot·read-only·seccomp/capability/resource 제한 Docker test/build, 동일 SHA256 QA, 별도 Owner 수락. SHA256은 fixture manifest 식별자이며 Git commit SHA와 구분한다. 실제 Codex thread ID를 보존하며 exec가 별도 turn ID를 노출하지 않아 turnId=null로 기록한다.
+- 한계: 단일 로컬 계정·소유한 node-functions-v1 fixture만 허용한다. 임의 저장소/의존성 설치/네트워크/외부 배포·merge는 미지원이다. 구독 한도는 외부 Codex 사용과 공유되며 공급자 수치 반영 지연이 있다. 완료된 turn의 토큰만 합산하며 응답 없는 중단 호출의 사용량은 미확정이다. 언어 비교 미실행. 기존 범용 Phase 1 전부 완료를 의미하지 않는다.
+- 근거: [공식 인증](https://learn.chatgpt.com/docs/auth), [app-server](https://learn.chatgpt.com/docs/app-server), [구독 한도](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan). 열람 2026-10-19, 개별 변경일 미공개. 로컬 CLI0.162.1 실제 호출 및 Docker/DB/브라우저 결과는 README/체크리스트.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

@@ -1,5 +1,11 @@
 # 데이터베이스 설계
 
+## Phase 1 실제 migration 보충 — 2026-10-19
+
+0002_subscription_workflows.sql은 workflow_runs와 workflow_acceptances를 추가한다. run은 org/project/task 복합 FK, 활성 run/task 유일성, status/version, JSON checkpoint, private lease/expiry/stop token을 저장한다. 수락은 run별 단일 소비이며 candidate SHA256·Owner·session을 연결한다. FOR UPDATE SKIP LOCKED claim, 60초 lease와 token fencing, 중단 확인 뒤 stop token 소비를 구현했다. 만료된 RUNNING은 BLOCKED/RECOVERY_REQUIRED로 보존한다. 종료 불명 또는 stop token 미해소 행이 있으면 공유 구독의 새 claim을 차단한다.
+
+현재 profile/output·manifest·test/build 로그·QA/usage는 checkpoint JSON에 보존하며 별도 LangGraph checkpoint schema는 도입하지 않는다(ADR-011). 아래 전체 테이블 목록은 후속 확장 논리 설계다. HTTP 응답에는 lease/stop token을 내보내지 않는다.
+
 ## 1. 목적
 
 영구 상태·실행 근거·승인·비용·조직 확장을 같은 식별자로 연결한다. 이 문서는 논리 스키마이며 migration이나 서비스 코드가 아니다.

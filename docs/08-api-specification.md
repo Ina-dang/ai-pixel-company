@@ -1,5 +1,20 @@
 # API 계약
 
+## Phase 1 구독 실행 구현 보충 — 2026-10-19
+
+다음 경로는 /api/v1 기준이며 Owner 세션 인증을 받는다. 쓰기에는 Origin/CSRF·Idempotency-Key가 필요하며 제어/수락에는 expectedVersion을 검사한다. 응답은 {data,requestId} envelope다.
+
+| 경로 | 실제 계약 |
+|---|---|
+| GET /subscription | ready/reason/authMode/billingMode/windows/checkedAt. 호출·구매 없이 인증/한도 조회 |
+| GET /tasks/:id/runs | {items:[run]} 최신 순서, 해당 조직/업무만 |
+| POST /tasks/:id/runs | {fixture:"node-functions-v1"}만 허용. 임의 경로/명령/공급자 옵션 거부 |
+| GET /runs/:id | status/checkpoint/roles/workspace/verification/usage 및 stopping/resumable. 비밀 token 제외 |
+| POST /runs/:id/control | action pause/resume/cancel, expectedVersion. unknown-stop/recovery 재개 불가 |
+| POST /runs/:id/accept | candidateSha/expectedVersion. 같은 SHA 변경·test/build0·Sandbox·QA PASS·Owner 후 단일 수락 |
+
+run의 QUEUED/RUNNING/PAUSED/BLOCKED/WAITING_APPROVAL/SUCCEEDED/FAILED/CANCELLED는 task 상태와 구분한다. SSE에 workflow.run.created/updated, agent.completed, approval.requested/resolved를 추가한다. worker는 SUCCEEDED/COMPLETED를 직접 승인하지 못한다. /health는 phase와 worker 구성 여부를 반환하며 실제 구독 준비 상태는 인증된 /subscription에서 확인한다. 최초 Python 내부 HTTP 경로는 ADR-011 대체로 현재 미구현이다.
+
 ## Phase 0 구현 보충 — 2026-10-19
 
 `GET /projects`, `GET /projects/:id/tasks`는 `limit=1..100`(기본100)·opaque `cursor`를 받으며 `{data:[],pagination:{nextCursor:string|null},requestId}`를 반환한다. created_at DESC/id DESC keyset으로 조회하고 PostgreSQL 마이크로초 원문을 커서에 보존한다. 브라우저 프로젝트 목록은 끝 페이지까지 조회한다. snapshot은 해당 프로젝트 전체 현재 task를 같은 REPEATABLE READ snapshot으로 반환한다.
