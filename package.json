@@ -22,6 +22,7 @@
     "verify:contracts": "pnpm --filter @ai-pixel/contracts contracts:check",
     "verify:agents": "tsx scripts/phase1-smoke.ts",
     "verify:office-live": "tsx scripts/phase2-smoke.ts",
+    "verify:office-visual": "tsx scripts/office-visual-smoke.ts",
     "verify:staffing-live": "tsx scripts/phase2-smoke.ts --hire",
     "verify:integrations-live": "tsx scripts/check-integrations.ts",
     "verify:github-live": "tsx scripts/phase3-github-live.ts",

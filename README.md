@@ -117,6 +117,14 @@ GitHub 실제 webhook 시험은 초기 ping의 403을 확인한 뒤 수정했다
 
 ⚠️ 현재 Sandbox는 소유한 고정 fixture만 지원한다. 임의 저장소·의존성 설치·외부 네트워크 실행은 지원하지 않는다. GitHub App 외부 쓰기·현재 head의 로컬 검사 상태, Slack 실제 보고와 실제 webhook 연결을 검증했지만 일반 CI webhook의 원격 역순/철회 시험, Slack 명령 처리와 merge 승인 실행기는 남아 있다. 임시 공개 연결은 닫았으며 상시 ingress는 없다. Redis/Python LangGraph는 PostgreSQL 큐/Node worker로 대체했다(ADR-011). 한국어/영어 비교 실험은 미실행이다. 사무실은 프로젝트별 세 역할 투영이며 회의 시뮬레이션·대규모 조직은 후속 범위다.
 
+## 사무실 화면 시범 개선 — 2026-10-19
+
+기존 Phaser 3·실행 엔진·snapshot/SSE 계약을 유지했다. `pixel-agents`의 [MIT 라이선스](https://github.com/pixel-agents-hq/pixel-agents/blob/b1bafd02896d90d83457266575a1e8e5011ce997/LICENSE)를 확인하고 해당 commit의 `core/src/paletteUtils.ts`에서 균형 팔레트 선택 함수만 출처·저작권 고지와 함께 수정 사용했다. 고정 역할별 의상, 직접 그린 커피 머신·서버 선반, 영역별 러그·좌석 표식, 선택 직원의 전체 활동 말풍선과 다른 활동 직원의 작은 상태 배지를 적용했다. 외부 이미지·유료 자산·이미지 생성 API는 사용하지 않았다. MIT 코드와 직접 제작한 CC0 그래픽의 범위는 `/office-licenses.txt`에 구분했다.
+
+충돌 맵·직원 목표 좌표·서버 상태 판정은 변경하지 않았다. 모바일에서는 선택 직원의 실제 활동을 DOM 텍스트로 읽을 수 있다. 레이아웃 편집기·회의 시뮬레이션·대규모 직원 표시는 이번 시범에 포함하지 않는다.
+
+검증: `pnpm verify` 성공(테스트141개, lint·typecheck·TS16/Python26 계약 fixture·build), `pnpm test:e2e` Chromium17개 성공. `pnpm verify:office-visual 56c54d8a-de76-4400-8308-a63b1bd2adaa`로 실제 서버 PM WAITING·Developer/QA IDLE을 화면과 대조했다. 390px·키보드 선택·그래픽 토글·새로고침을 확인했고 페이지 오류/업무 변경 요청/외부 요청은 각각0건이었다. 모델 호출 없이 기존 승인 대기 기록만 읽었다. 스크린샷은 Git 제외 `test-results/office-pilot-desktop.png`, `test-results/office-pilot-mobile.png`에 저장된다.
+
 ## 구현 범위 판정
 
 **Phase 0 완료 / Phase 1 제한 fixture 핵심 경로 / Phase 2 사무실 / Phase 3 채용·칸반·GitHub 외부 쓰기 검증**. 전체 Phase 3와 범용 저장소·언어 비교·운영 B 출시를 완료했다고 주장하지 않는다. 운영 배포·merge·유료 자원 생성은 수행하지 않았다. 공식 구독 근거는 [OpenAI 인증](https://learn.chatgpt.com/docs/auth), 그래픽 계약은 [Phaser3.90 Tilemap](https://docs.phaser.io/api-documentation/3.90.0/class/tilemaps-tilemap)·[Tiled JSON](https://doc.mapeditor.org/en/stable/reference/json-map-format/)을 따른다(열람 2026-10-19, 개별 변경일 미공개).

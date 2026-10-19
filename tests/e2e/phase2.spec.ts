@@ -169,6 +169,28 @@ test('three staff coexist; keyboard details preserve escaped text and mobile tas
   await expect(page.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
 });
 
+test('visual pilot keeps selected speech tied to server state, motion preference and local license notice', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const state = await mockOffice(page, [assigned('PM', 10, { state: 'WAITING', runStatus: 'WAITING_APPROVAL', activityKo: '실제 검증 결과의 Owner 수락을 기다립니다' }), assigned('DEVELOPER', 10), assigned('QA', 10)]);
+  const pageErrors: string[] = []; page.on('pageerror', error => pageErrors.push(error.message));
+  await loginOffice(page);
+  const office = page.getByRole('region', { name: '픽셀 사무실', exact: true });
+  await expect(office).toHaveAttribute('data-office-state', 'ready');
+  await expect(office.locator('[data-office-style="visual-pilot-v1"] canvas')).toHaveCount(1);
+  const speech = office.getByRole('note', { name: '선택 직원 현재 활동', exact: true });
+  await expect(speech).toContainText('실제 검증 결과의 Owner 수락을 기다립니다');
+  await office.getByRole('button', { name: 'QA 직원 상세', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(speech).toContainText('QA 작업 중');
+  await expect(speech).not.toContainText('수락 완료');
+  const notice = await page.request.get('/office-licenses.txt'); expect(notice.ok()).toBe(true);
+  expect(await notice.text()).toContain('Copyright (c) 2026 Pablo De Lucca');
+  expect(await notice.text()).toContain('b1bafd02896d90d83457266575a1e8e5011ce997');
+  await expect(office.getByRole('link', { name: '오픈소스 고지', exact: true })).toHaveAttribute('href', '/office-licenses.txt');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(speech).toBeVisible(); expect(pageErrors).toEqual([]); expect(state.mutations).toEqual([]);
+});
+
 test('map failure preserves DOM staff details and graphics toggle tears down one canvas', async ({ page }) => {
   const state = await mockOffice(page, [assigned('PM', 10), assigned('DEVELOPER', 10), assigned('QA', 10)]);
   await page.route('**/office-map.json', route => route.abort('failed'));

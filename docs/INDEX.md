@@ -1,5 +1,7 @@
 # 문서 목차
 
+사무실 화면 시범(2026-10-19): Phaser·서버 상태 계약을 유지하며 MIT 팔레트 함수만 선별 재사용하고 원본 그래픽·가구·러그·말풍선을 개선했다. 현재 검증은 자동 테스트141개·Chromium17개 및 실제 서버 상태와의 읽기 전용 대조를 통과했다. 적용 범위·라이선스는 README와 09에 기록했다. 아래138/16 수치는 직전 Phase 3 검증 이력이다.
+
 최신성 체크: 2026-10-19. Phase 0/1 제한 fixture 핵심 경로와 Phase 2 사무실을 검증했고 사용자가 Phase 2 결과를 수락했다. Phase 3 채용·배정·칸반과 GitHub/Slack adapter를 추가했으며 자동 시험138개·Chromium16개와 TS16/Python26 계약 fixture가 통과했다. 신규 Codex 직원과 실제 App Issue/push/draft PR/현재 head 로컬 검사 상태, Slack 비공개 채널 한국어 보고·원격 URL challenge, GitHub 실제 ping 재전달/중복 제거도 검증했다. 일반 CI webhook 원격 역순/철회·Slack 명령·merge 승인 실행기가 남아 전체 Phase 3 완료는 아니다. ADR-011/012를 따르며 언어 비교·범용 저장소·Phase 4~5는 미구현/미검증이다. 실제 실행과 잔여 항목은 README·IMPLEMENTATION_CHECKLIST를 따른다.
 
 | 파일 | 목적 | 상태 |

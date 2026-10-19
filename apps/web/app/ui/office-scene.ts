@@ -1,6 +1,7 @@
 import type { OfficeAgent } from '@ai-pixel/contracts';
 import * as Phaser from 'phaser';
 import { createOfficeArt, type StaffAnimation } from './office-art';
+import { OFFICE_BUBBLE_STYLES, OFFICE_FURNITURE_SWAPS, OFFICE_VISUAL_ZONES, officeActivityExcerpt } from './office-presentation';
 
 const TILE = 32;
 const WIDTH = 896;
@@ -31,8 +32,10 @@ type Visual = {
   name: Phaser.GameObjects.Text;
   stateDot: Phaser.GameObjects.Arc;
   bubble: Phaser.GameObjects.Container;
+  speech: Phaser.GameObjects.Graphics;
+  speechTitle: Phaser.GameObjects.Text;
+  speechKey: string;
   activity: Phaser.GameObjects.Text;
-  indicator: Phaser.GameObjects.Text;
   path: Point[];
   target: Point;
   hovering: boolean;
@@ -145,6 +148,14 @@ export function createOfficeScene(parent: HTMLElement, callbacks: Callbacks): Of
 
     private decorate() {
       const decoration = this.add.graphics().setDepth(1);
+      for (const zone of OFFICE_VISUAL_ZONES) {
+        decoration.fillStyle(0x31463e, 0.08).fillRect(zone.x + 3, zone.y + 3, zone.width, zone.height);
+        decoration.fillStyle(zone.color, 0.76).fillRect(zone.x, zone.y, zone.width, zone.height);
+        decoration.lineStyle(1, zone.border, 0.9).strokeRect(zone.x + 4, zone.y + 4, zone.width - 8, zone.height - 8);
+        for (let x = zone.x + 10; x < zone.x + zone.width - 8; x += 12) decoration.fillStyle(zone.border, 0.24).fillRect(x, zone.y + 9, 3, 1);
+      }
+      const furniture = this.tilemap?.getLayer('furniture')?.tilemapLayer;
+      for (const item of OFFICE_FURNITURE_SWAPS) furniture?.putTileAt(item.tile, item.x, item.y);
       decoration.fillStyle(0xfaf4d6, 0.13);
       for (const x of [96, 352, 480, 704]) {
         decoration.fillRect(x, 32, 58, 35); decoration.fillRect(x + 3, 67, 58, 24); decoration.fillRect(x + 6, 91, 58, 12);
@@ -161,6 +172,10 @@ export function createOfficeScene(parent: HTMLElement, callbacks: Callbacks): Of
         this.add.text(x, y, name, { ...labelStyle, fontSize: '13px', fontStyle: 'bold', color: '#425044' }).setDepth(4);
         this.add.text(x, y + 18, caption, { ...labelStyle, fontSize: '8px', color: '#798679' }).setLetterSpacing(2).setDepth(4);
       }
+      for (const [name, x] of [['PM', 400], ['DEV', 528], ['QA', 752]] as const) {
+        this.add.text(x, 142, name, { ...labelStyle, fontSize: '8px', fontStyle: 'bold', color: '#50675e', backgroundColor: '#f6f0dc', padding: { x: 6, y: 2 } }).setOrigin(0.5).setDepth(4);
+      }
+      this.add.text(817, 345, 'COFFEE', { ...labelStyle, fontSize: '7px', color: '#6c796a' }).setOrigin(0.5).setDepth(4);
       this.add.text(WIDTH / 2, 268, 'AI PIXEL COMPANY', { ...labelStyle, fontSize: '10px', color: '#93968c' })
         .setOrigin(0.5).setLetterSpacing(3).setDepth(4);
     }
@@ -183,20 +198,17 @@ export function createOfficeScene(parent: HTMLElement, callbacks: Callbacks): Of
       const sprite = this.add.sprite(0, 0, 'office-staff', `${agent.id}:idle:0`).setOrigin(0.5, 0.95);
       const name = this.add.text(0, 16, '', { ...labelStyle, fontSize: '10px', fontStyle: 'bold', backgroundColor: '#fffaf0', padding: { x: 8, y: 3 } }).setOrigin(0.5);
       const stateDot = this.add.circle(-27, 16, 2.5, STATE_COLORS[agent.state]);
-      const indicator = this.add.text(16, -37, '', { ...labelStyle, fontSize: '14px', fontStyle: 'bold' }).setOrigin(0.5);
       const bubble = this.add.container(0, -64);
       const speech = this.add.graphics();
-      speech.fillStyle(0xffffff, 0.97).fillRoundedRect(-65, -19, 130, 34, 5);
-      speech.lineStyle(1, 0xdcded4).strokeRoundedRect(-65, -19, 130, 34, 5);
-      speech.fillStyle(0xffffff).fillTriangle(-5, 15, 5, 15, 0, 21);
-      const activity = this.add.text(0, -2, '', { ...labelStyle, fontSize: '10px', align: 'center', wordWrap: { width: 118, useAdvancedWrap: true } }).setOrigin(0.5);
-      bubble.add([speech, activity]);
+      const speechTitle = this.add.text(0, -16, '', { ...labelStyle, fontSize: '8px', fontStyle: 'bold', align: 'center' }).setOrigin(0.5);
+      const activity = this.add.text(0, 5, '', { ...labelStyle, fontSize: '10px', align: 'center', wordWrap: { width: 144, useAdvancedWrap: true } }).setOrigin(0.5);
+      bubble.add([speech, speechTitle, activity]);
       const target = this.add.rectangle(0, -11, 54, 67, 0xffffff, 0).setInteractive({ useHandCursor: true });
-      const visual: Visual = { data: agent, body, sprite, marker, name, stateDot, bubble, activity, indicator, path: [], target: point, hovering: false, completeUntil: 0 };
+      const visual: Visual = { data: agent, body, sprite, marker, name, stateDot, bubble, speech, speechTitle, speechKey: '', activity, path: [], target: point, hovering: false, completeUntil: 0 };
       target.on('pointerdown', () => { if (!destroyed) callbacks.onSelect(agent.id); });
       target.on('pointerover', () => { visual.hovering = true; this.paint(visual, this.time.now); });
       target.on('pointerout', () => { visual.hovering = false; this.paint(visual, this.time.now); });
-      body.add([shadow, marker, sprite, name, stateDot, indicator, bubble, target]);
+      body.add([shadow, marker, sprite, name, stateDot, bubble, target]);
       this.staff.set(agent.id, visual);
       return visual;
     }
@@ -224,7 +236,6 @@ export function createOfficeScene(parent: HTMLElement, callbacks: Callbacks): Of
         visual.target = point; visual.data = agent;
         visual.name.setText(agent.nameKo.slice(0, 12));
         visual.stateDot.setX(-visual.name.width / 2 - 5);
-        visual.activity.setText(agent.activityKo.slice(0, 44));
         visual.stateDot.setFillStyle(STATE_COLORS[agent.state]);
         this.paint(visual, this.time.now);
       }
@@ -234,9 +245,30 @@ export function createOfficeScene(parent: HTMLElement, callbacks: Callbacks): Of
       const selected = this.options.selectedId === visual.data.id;
       visual.marker.setVisible(selected);
       visual.name.setColor(selected ? '#5750cb' : '#30394b');
-      visual.indicator.setText(visual.data.state === 'ERROR' ? '!' : visual.data.state === 'BLOCKED' ? 'Ⅱ' : visual.data.state === 'WAITING' ? '·' : '');
-      visual.indicator.setColor(visual.data.state === 'ERROR' ? '#b85d63' : '#9d773d');
       visual.bubble.setVisible(selected || visual.hovering || visual.data.state !== 'IDLE');
+      const expanded = selected || visual.hovering;
+      const speechStyle = OFFICE_BUBBLE_STYLES[visual.data.state];
+      const speechKey = `${expanded}:${visual.data.state}:${visual.data.activityKo}`;
+      if (speechKey !== visual.speechKey) {
+        visual.speechKey = speechKey;
+        visual.speech.clear();
+        visual.bubble.setPosition(expanded ? 0 : 25, expanded ? -72 : -34);
+        if (expanded) {
+          visual.speech.fillStyle(0x263d35, 0.12).fillRoundedRect(-80, -24, 164, 48, 5);
+          visual.speech.fillStyle(0xfffcf0, 0.99).fillRoundedRect(-82, -27, 164, 48, 5);
+          visual.speech.lineStyle(1, speechStyle.color, 0.7).strokeRoundedRect(-82, -27, 164, 48, 5);
+          visual.speech.fillStyle(speechStyle.color, 0.85).fillRect(-74, -21, 3, 7);
+          visual.speech.fillStyle(0xfffcf0).fillTriangle(-4, 21, 4, 21, 0, 26);
+          visual.speechTitle.setText(`${visual.data.role === 'DEVELOPER' ? 'DEV' : visual.data.role} · ${speechStyle.label}`).setColor(speechStyle.text).setVisible(true);
+          visual.activity.setPosition(0, 5).setFontSize(10).setColor('#3c4944').setText(officeActivityExcerpt(visual.data.activityKo));
+        } else {
+          visual.speech.fillStyle(0xfffcf0, 0.98).fillRoundedRect(-13, -13, 26, 24, 4);
+          visual.speech.lineStyle(1, speechStyle.color, 0.8).strokeRoundedRect(-13, -13, 26, 24, 4);
+          visual.speech.fillStyle(0xfffcf0).fillTriangle(-4, 11, 2, 11, -5, 16);
+          visual.speechTitle.setVisible(false);
+          visual.activity.setPosition(0, -1).setFontSize(14).setColor(speechStyle.text).setText(speechStyle.symbol);
+        }
+      }
       const animation: StaffAnimation = visual.path.length ? 'walk' : visual.completeUntil > time ? 'complete' : ANIMATIONS[visual.data.state];
       const frame = this.options.reducedMotion || !this.options.visible ? 0 : Math.floor(time / (animation === 'walk' ? 130 : animation === 'type' ? 220 : 420)) % 4;
       const key = `${visual.data.id}:${animation}:${frame}`;

@@ -16,8 +16,13 @@
 .office-fallback { position: absolute; inset: 18px 20px 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; color: #4e6657; background: repeating-linear-gradient(0deg, #e7ece0, #e7ece0 31px, #dfe6d9 32px); }
 .office-fallback-mark { font-size: 42px; line-height: 1; margin-bottom: 16px; }
 .office-fallback p { font-size: 12px; margin: 8px 0 14px; }
-.office-caption { display: flex; justify-content: space-between; gap: 12px; padding: 8px 1px; color: #637869; font-size: 9px; letter-spacing: 1.3px; font-weight: 650; }
-.office-caption span:last-child { font-weight: 400; letter-spacing: .2px; }
+.office-caption { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 1px; color: #637869; font-size: 9px; letter-spacing: 1.3px; font-weight: 650; }
+.office-caption span:nth-child(2) { font-weight: 400; letter-spacing: .2px; }
+.office-caption a { color: #526b5d; font-size: 10px; letter-spacing: 0; font-weight: 400; text-underline-offset: 3px; }
+.office-caption a:focus-visible { outline: 2px solid var(--purple, #5750cb); outline-offset: 3px; }
+.office-selection-speech { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 16px; margin: 0; padding: 12px 28px; border-bottom: 1px solid var(--border); background: #fafbf5; font-size: 12px; line-height: 1.6; }
+.office-selection-name { color: #50675e; }
+.office-selection-message { color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
 .office-team { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--border); }
 .office-person { min-width: 0; border: 0; border-right: 1px solid var(--border); border-bottom: 3px solid transparent; background: white; padding: 22px; display: flex; gap: 15px; align-items: flex-start; text-align: left; transition: background-color .15s, border-color .15s; }
 .office-person:last-child { border-right: none; }

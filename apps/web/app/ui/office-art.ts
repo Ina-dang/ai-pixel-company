@@ -1,8 +1,9 @@
 import type Phaser from 'phaser';
+import { pickDiversePalette } from './vendor/pixel-agents-palette';
 
 // Original, code-drawn artwork and layout dedicated to CC0-1.0. No downloaded art.
 export const OFFICE_ART_PROVENANCE = {
-  id: 'ai-pixel-office-original-v1',
+  id: 'ai-pixel-office-original-v2',
   license: 'CC0-1.0',
   source: 'Original AI Pixel Company procedural Canvas2D pixel art',
   thirdPartyImages: false,
@@ -11,6 +12,13 @@ export const OFFICE_ART_PROVENANCE = {
 export const STAFF_STATES = ['idle', 'walk', 'type', 'review', 'wait', 'error', 'complete'] as const;
 export type StaffAnimation = typeof STAFF_STATES[number];
 export const STAFF_ROLES = ['PM', 'DEVELOPER', 'QA'] as const;
+const WARDROBE = ['#7585a9', '#4b9185', '#bd926d'];
+const paletteCounts = WARDROBE.map(() => 0);
+const roleClothes = Object.fromEntries(STAFF_ROLES.map(role => {
+  const chosen = pickDiversePalette(WARDROBE.length, paletteCounts, () => 0);
+  paletteCounts[chosen.palette] += 1;
+  return [role, WARDROBE[chosen.palette]];
+})) as Record<typeof STAFF_ROLES[number], string>;
 
 function rectangle(context: CanvasRenderingContext2D, color: string, x: number, y: number, width: number, height: number) {
   context.fillStyle = color;
@@ -52,6 +60,21 @@ function tile(context: CanvasRenderingContext2D, id: number) {
   if (id === 28) {
     r('#e7e6d9', 0, 0, 32, 32); r('#8f9e96', 1, 5, 30, 22);
     for (let y = 8; y < 26; y += 4) r('#c1c8b6', 3, y, 26, 1);
+    return;
+  }
+  if (id === 10) {
+    r('#28333e24', 1, 28, 30, 4); r('#b4916c', 2, 20, 28, 10); r('#e5c59c', 1, 18, 30, 3);
+    r('#384d4a', 4, 2, 17, 16); r('#6b8880', 6, 4, 13, 5); r('#bfd3bd', 8, 5, 5, 2);
+    r('#253b38', 8, 11, 10, 4); r('#e9dfc4', 11, 13, 5, 5); r('#a9baa2', 23, 12, 6, 6);
+    r('#f1e8ce', 24, 13, 4, 3); r('#846e50', 8, 24, 4, 2); r('#846e50', 20, 24, 4, 2); return;
+  }
+  if (id === 14) {
+    r('#23353b24', 2, 29, 28, 3); r('#48565c', 3, 1, 26, 29); r('#71817e', 5, 2, 22, 2);
+    for (let row = 0; row < 3; row++) {
+      const y = 6 + row * 8;
+      r('#27393e', 6, y, 20, 6); r('#718783', 8, y + 2, 10, 1);
+      r('#b3ce9d', 21, y + 2, 2, 2); r('#c5b984', 24, y + 2, 1, 2);
+    }
     return;
   }
   if ([11, 12, 13].includes(id)) {
@@ -126,14 +149,15 @@ function staff(context: CanvasRenderingContext2D, role: typeof STAFF_ROLES[numbe
   const r = (color: string, x: number, y: number, width: number, height: number) => rectangle(context, color, x, y, width, height);
   const skin = role === 'PM' ? '#c18d70' : role === 'DEVELOPER' ? '#edb799' : '#dab08b';
   const hair = role === 'PM' ? '#674b48' : role === 'DEVELOPER' ? '#253d48' : '#3d3948';
-  const shirt = role === 'PM' ? '#8072ae' : role === 'DEVELOPER' ? '#4b9185' : '#c48d71';
+  const shirt = roleClothes[role];
   const movement = state === 'walk' ? frame % 2 * 2 : 0;
-  const bob = state === 'walk' && frame % 2 ? -1 : 0;
+  const bob = state === 'walk' && frame % 2 ? -1 : state === 'idle' && frame === 2 ? -1 : 0;
   const complete = state === 'complete' && frame % 2 === 1;
   context.translate(0, bob);
   r('#333c4e', 10, 28, 6, 8 - movement); r('#333c4e', 18, 28, 5, 6 + movement);
   r('#252a36', 9, 34 - movement, 7, 3); r('#252a36', 18, 34 + movement, 7, 3);
   r(shirt, 9, 17, 16, 14); r('#ffffff16', 10, 18, 2, 11); r('#272b3d22', 23, 19, 2, 11);
+  r('#ffffff28', 11, 18, 3, 2); r('#26343e20', 10, 29, 14, 2);
   r(skin, 14, 14, 6, 5); r('#eadcc6', 14, 19, 6, 2);
   if (role === 'DEVELOPER') { r('#70ad96', 12, 19, 2, 7); r('#70ad96', 21, 19, 2, 7); r('#396c65', 13, 28, 8, 2); }
   if (role === 'QA') { r('#e5bf88', 13, 18, 4, 8); r('#ebca94', 17, 18, 4, 3); }
@@ -147,6 +171,7 @@ function staff(context: CanvasRenderingContext2D, role: typeof STAFF_ROLES[numbe
   r(hair, 11, 4, 13, 5); r(hair, 9, 8, 3, 6); r(hair, 23, 7, 3, 6);
   if (role === 'PM') { r(hair, 19, 0, 7, 6); r('#bf8c8b', 19, 3, 6, 2); r(hair, 12, 8, 4, 2); }
   if (role === 'DEVELOPER') { r(hair, 9, 3, 11, 4); r('#87989a', 7, 10, 3, 6); r('#87989a', 25, 10, 3, 6); r('#a9b5ac', 9, 5, 1, 7); }
+  if (role === 'DEVELOPER') { r('#75858b', 26, 14, 2, 4); r('#384b52', 23, 17, 4, 1); }
   if (role === 'QA') { r(hair, 24, 7, 4, 12); r('#be8d7c', 25, 8, 4, 3); r('#59616c', 11, 10, 6, 4); r('#59616c', 19, 10, 6, 4); r('#dfd6c5', 12, 11, 4, 2); r('#dfd6c5', 20, 11, 4, 2); }
   if (state !== 'wait' || frame % 2 === 0) { r('#30323e', 14, 11, 2, 2); r('#30323e', 21, 11, 2, 2); }
   else { r('#7f5e58', 14, 12, 2, 1); r('#7f5e58', 21, 12, 2, 1); }

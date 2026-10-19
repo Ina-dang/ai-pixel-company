@@ -80,10 +80,11 @@ export function PixelOffice({ projectId, agents: input, connection, syncedAt, on
       <small>{syncedAt ? `마지막 확인 ${formatTime(syncedAt)} KST` : '직원 상태를 확인하고 있습니다.'}</small>
     </div>
     <div className={`office-visual ${state === 'ready' ? 'is-ready' : ''}`}>
-      <div ref={mount} className="office-canvas" aria-hidden="true" />
+      <div ref={mount} className="office-canvas" data-office-style="visual-pilot-v1" aria-hidden="true" />
       {state !== 'ready' && <div className="office-fallback" role="status"><span className="office-fallback-mark" aria-hidden="true">▦</span><strong>{state === 'loading' ? '사무실 문을 여는 중…' : state === 'off' ? '직원 상태를 텍스트로 보고 있어요' : '직원 목록으로 계속 확인할 수 있어요'}</strong><p>{!hasAgents ? '서버의 직원 상태를 확인하고 있습니다.' : '업무 실행과 결과는 아래 직원 상세에서 확인하세요.'}</p>{state === 'fallback' && hasAgents && <button type="button" className="button secondary" onClick={() => setRetry(value => value + 1)}>그래픽 다시 불러오기</button>}</div>}
-      <div className="office-caption"><span>AI PIXEL COMPANY</span><span>작은 공간, 근거 있는 업무</span></div>
+      <div className="office-caption"><span>AI PIXEL COMPANY</span><span>직원을 선택하면 현재 작업을 볼 수 있어요</span><a href="/office-licenses.txt" target="_blank" rel="noopener noreferrer">오픈소스 고지</a></div>
     </div>
+    {selected && <div className="office-selection-speech" role="note" aria-label="선택 직원 현재 활동"><strong className="office-selection-name">{selected.nameKo} · {stateNames[selected.state]}</strong><span className="office-selection-message">현재 작업 · {selected.activityKo}</span></div>}
     <fieldset className="office-team" aria-label="직원 목록">{officeRoles.map(role => {
       const agent = agents.find(item => item.id === role);
       return <button type="button" key={role} className={`office-person ${selectedId === role ? 'is-selected' : ''}`} aria-label={`${roleNames[role]} 직원 상세`} aria-pressed={selectedId === role} data-office-agent={role} data-agent-state={agent?.state ?? 'UNKNOWN'} data-run-stage={agent?.stage ?? ''} data-run-id={agent?.runId ?? ''} onClick={() => setSelectedId(role)}>
