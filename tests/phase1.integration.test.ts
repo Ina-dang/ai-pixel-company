@@ -86,14 +86,16 @@ describe('Phase 1 durable subscription workflow', () => {
     await repository.claim();
     expect((await (await request(`/runs/${run.id}`)).json()).data).not.toHaveProperty('leaseToken');
   });
-  test('concurrent claimers acquire different leases and cannot double claim', async () => {
+  test('concurrent claimers serialize the shared subscription slot without double claiming', async () => {
     await createRun(); await createRun();
     const results = await Promise.all([repository.claim(), repository.claim(), repository.claim()]);
     const claims = results.filter((run) => run !== null);
-    expect(claims).toHaveLength(2);
-    expect(new Set(claims.map((run) => run.id)).size).toBe(2);
-    expect(new Set(claims.map((run) => run.leaseToken)).size).toBe(2);
-    expect((await database.sql`select 1 from tasks where status='PLANNING'`)).toHaveLength(2);
+    expect(claims).toHaveLength(1);
+    expect((await database.sql`select 1 from tasks where status='PLANNING'`)).toHaveLength(1);
+    const first = claims[0]; if (!first?.leaseToken) throw new Error('Expected lease');
+    await repository.save(first.id, first.leaseToken, { status: 'FAILED' });
+    const next = await repository.claim(); expect(next?.id).not.toBe(first.id); expect(next?.leaseToken).not.toBe(first.leaseToken);
+    expect(next).not.toBeNull();
   });
   test('lease tokens fence stale writes; expired work recovers durably without blind replay', async () => {
     const run = await createRun();

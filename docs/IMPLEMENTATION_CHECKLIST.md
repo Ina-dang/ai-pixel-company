@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-Phase 0 기반·Phase 1 구독 제한 fixture·Phase 2 사무실과 수락된 화면 시범, Phase 3 채용·칸반·GitHub/Slack adapter·Slack 명령·별도 merge 승인 실행기를 구현했다. 자동 시험158개 = 시범141 + 명령/merge 경계17, Chromium20개·TS16/Python26 계약 fixture가 통과했다. 실제 Slack TASK/STATUS/HELP 3건·SENT 알림3건·TODO1건/run0건, 실제 GitHub PR head/base·CI/정책과 Draft/미수락 차단을 확인했다. 실제 merge 성공은 사용자 지시로 미수행이며 모의 transport의 성공/UNKNOWN/조정 경로와 구분한다. 세부 근거는 README를 따른다. 상시 ingress·일반 CI webhook 원격 역순/철회·언어 비교/범용 저장소는 남았다. 운영 배포·실제 merge·추가 유료 모델 API 호출은 수행하지 않았다.
+Phase 0 기반·Phase 1 제한 fixture·Phase 2 사무실·Phase 3 협업에 이어 Phase 4 P4-01~04를 구현했다. 자동 시험188개·Chromium25개·TS16/Python26 계약 fixture를 검증했다. 실제 Codex 프로젝트2개와 AI평가3회·5종 초안·선행 수락 전 후속run0을 확인했고 결과 수락/게시/실제 merge는 수행하지 않았다. 기존 Slack/GitHub 근거와 이번 실패 시험도 README에서 구분한다. 상시 ingress·일반 CI webhook 원격 역순/철회·범용 저장소·언어 비교·P4-05/06 운영 경보/복구/C 출시 gate는 남았다. 운영 배포·새 유료 자원 생성은 수행하지 않았다.
 
 ## Phase 0 — Foundation
 
@@ -57,12 +57,14 @@ Phase 0 기반·Phase 1 구독 제한 fixture·Phase 2 사무실과 수락된 �
 
 ## Phase 4 — Company Operations / C 출시
 
-- [ ] P4-01 AUTO/SELF/PEER/PM/USER 분리·근거/가중치/한국어 요약(T17).
-- [ ] P4-02 동일 모델/상호점수 편향·loop 제한·Owner 검토·자동 해고/권한 상승 금지(T17).
-- [ ] P4-03 휴직/퇴사/재채용·task/review/usage 이력 보존(T17).
-- [ ] P4-04 다중 프로젝트 권한/저장소/통합/예산·DAG/scheduler(T11/T17).
+- [x] P4-01 AUTO/SELF/PEER/PM/USER·facts/opinion·rubric1/null·한국어 원문/요약·불변 근거/수정본(T17). PG/API와 실제 Codex AI3종 각1회·5종 DRAFT 확인.
+- [x] P4-02 동일 모델/상호점수 편향 표시·최초/수정 총2회·Owner 게시/이의·자동 해고/권한 상승 금지(T17). 오래된/미확정/무점수 게시 거부·UNKNOWN 공유 슬롯 차단 시험.
+- [x] P4-03 휴직/퇴사/재채용·부서 이동·task/review/usage 불변 이력(T17). PostgreSQL fixture로 과거 pinned profile/review 보존 확인.
+- [x] P4-04 Owner 조직/프로젝트·저장소/workspace/통합 격리·진행 예약 포함 예산·DAG/명시 예약·우선순위/FIFO·공유 슬롯1(T11/T17). 실제2프로젝트 test/build0·QA PASS, 후속 DEPENDENCY/run0. 범위는 제한 Node fixture/Owner 역할이며 범용 실행·세부 관리자·공정 할당 미포함.
 - [ ] P4-05 성과/비용/오류/지연/queue/Sandbox/provider·감사/경보(T19).
 - [ ] P4-06 DB/Redis/Engine/외부 장애·backup restore·운영 인계·C gate(T18/T19).
+
+2026-10-19: 전체 테스트188=이전158+Phase4 30, Chromium25=이전20+Phase4 5, lint/typecheck/contracts/build 통과. 선행 조건에 막힌 예약31건 뒤의 실행 가능한 업무가 누락되지 않는 회귀도 포함한다. 실제 성공/실패 시험과 SHA/스크린샷/사용량 범위는 README. 실제 merge/자동 결과 수락/운영 배포는 미수행이다. P4-05는 지표/큐/기본 감사 일부만 구현됐고 P4-06과 함께 전체 C 운영 출시 완료를 의미하지 않는다.
 
 ## Phase 5 — 후속 기능
 

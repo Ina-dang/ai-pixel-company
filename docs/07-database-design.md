@@ -1,5 +1,13 @@
 # 데이터베이스 설계
 
+## Phase 4 실제 저장 계약 — 2026-10-19
+
+Migration0006~0008은 조직/프로젝트 토큰 정책, UTC 월별 실행 예약·정산, 동일 프로젝트 DAG와 명시적 task 예약, 부서와 불변 이동 이력, 5유형 평가·불변 수정본·Owner 검토·AI 생성 작업을 추가한다. 기존 task/run/승인/통합 데이터는 삭제하지 않는다. 과거 완료 role의 공급자 보고 토큰만 월별 정산에 반영하며 통화 비용은 추정하지 않는다.
+
+평가는 task/대상/유형/평가자 조합당 하나이며 최초·수정 합계 2회다. 대상은 실행 당시 직원 profile version으로 고정한다. 수정본/Owner 검토/부서 이력은 update/delete를 금지한다. 게시 trigger는 4항목·rubric1 가중합·종료 실행·동일 후보 검증·필수 evidence 필드를 검사한다. API는 현재 evidence hash와 Owner 권한도 다시 검사한다. WAITING_APPROVAL은 확정 결과가 아니므로 게시할 수 없다.
+
+공유 advisory lock으로 workflow와 AI 평가의 공급자 슬롯을 1개로 제한한다. org lock 아래 진행 예약을 포함한 월 예산을 검사한다. DAG는 project lock+재귀 경로 검사와 DB trigger로 self/cycle/cross-project를 거부한다. 후속 실행은 선행 COMPLETED와 명시적 예약 의도를 모두 요구한다. 부서 이동은 새 프로필을 만들며 과거 staffing/review를 바꾸지 않는다.
+
 ## Phase 3 명령·merge 저장 계약 보충 — 2026-10-19
 
 Migration0005는 기존 task/run/승인 데이터를 삭제하지 않고 연동 저장 상태를 확장한다. inbox는 `connection_version`, `result`, `reply_status(NONE/PENDING/SENDING/SENT/FAILED/UNKNOWN)`, `reply_ref`를 추가한다. command payload는 actor mapping·정규 명령과 업무 원문을 저장하고 response_url/토큰/서명은 제외한다. task 생성과 receipt의 PROCESSED/result/outbox PENDING 전환은 같은 transaction이다.

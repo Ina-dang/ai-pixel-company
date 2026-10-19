@@ -1,5 +1,9 @@
 # 이벤트와 실시간 상태
 
+## Phase 4 이벤트 보충 — 2026-10-19
+
+기존 조직별 transaction event/cursor/SSE 경계를 유지하며 `company.updated`, `review.updated`, `project.schedule.updated`를 계약 enum에 추가했다. 정책/부서/프로젝트 수명·평가 초안/검토·명시 예약의 변경을 server commit 이후 전달한다. 프런트엔드는 현재 프로젝트의 읽기 모델을 새로 조회하며 단독으로 run/평가/완료 상태를 확정하지 않는다. 운영/평가 패널은 5초 조회도 사용하고 프로젝트 전환 시 이전 fetch를 abort한다.
+
 ## 1. 목적
 
 DB 상태와 픽셀/대시보드를 일치시키고 중복·역순·재접속·새로고침을 복구한다.

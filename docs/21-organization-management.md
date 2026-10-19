@@ -55,4 +55,10 @@ edge 삽입은 프로젝트 lock+경로 검사로 cycle을 막는다. 실행 시
 
 ## 11. 미확정 사항
 
-priority 수준·공정성·프로젝트 상한·부서 구조·세부 관리자 역할은 Phase 4에서 확정한다. 고급 HR 자동화는 초기 범위가 아니다.
+2026-10-19 구현은 URGENT→HIGH→MEDIUM→LOW, 같은 순위는 생성 시각 FIFO다. workflow와 AI 평가의 전체 공급자 슬롯은 1개다. 명시적으로 예약한 task만 scheduler가 검사하며 미예약 업무를 자동 실행하지 않는다. 우선순위 aging·프로젝트별 공정 할당·큰 목록 pagination·별도 관리자 역할은 후속 범위다. 현재 권한 모델은 조직 Owner와 project staffing 경계다.
+
+## Phase 4 구현 범위 — 2026-10-19
+
+프로젝트마다 저장소/기준 branch·staffing·실행 workspace·task/DAG·통합 설정·평가·토큰 정책을 유지한다. 기존 프로젝트의 GitHub/Slack 연결과 비밀은 새 프로젝트에 복제하지 않는다. 조직/프로젝트/직원 한도와 진행 예약을 함께 검사한다. 호출 직전에 Owner membership·직원 상태·project active·선행 완료·예산을 재검사한다. 실제 merge 승인은 기존 별도 경계를 그대로 유지한다.
+
+0~1개 정식 부서 배정과 불변 이동 이력을 추가했다. 이동은 새 직원 profile version이고 과거 실행 snapshot·평가·퇴사 이력은 유지한다. 빈 부서만 보관하며 프로젝트 보관은 활성 run/AI 생성/미해결 merge를 검사한다. 앱의 토큰 정책은 구독 청구 한도가 아니며 [16장](16-cost-management.md)의 미확정 사용량 한계를 따른다. 운영 경보/backup restore/C 출시 gate는 이 기능의 검증과 별도다.

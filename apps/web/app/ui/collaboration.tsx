@@ -6,12 +6,13 @@ import { employmentNames, kanbanLanes, laneTasks, listInput, operationNames, ope
   staffRoles, toolNames, validLimits, type Employee, type Integrations, type ProfileLimits, type StaffAssignment, type StaffRole, type StaffTemplate } from './collaboration-model';
 import './collaboration.css';
 import { MergeApproval, SlackCommandHistory } from './integration-approvals';
+import { CompanyOperations, EmployeeReviews } from './company-workspace';
 
 export type CollaborationWorkspaceProps = { projectId: string; tasks: Task[]; session: Session; refreshKey?: number;
-  onOpenTask: (id: string) => void; onChanged: () => void; onError: (error: unknown) => void };
+  onOpenTask: (id: string) => void; onChanged: () => void; onError: (error: unknown) => void; onSelectProject?: (id: string) => void };
 type StaffData = { templates: StaffTemplate[]; employees: Employee[]; assignments: StaffAssignment[] };
-type Tab = 'board' | 'staff' | 'integrations';
-const tabs: { id: Tab; label: string }[] = [{ id: 'board', label: '업무 보드' }, { id: 'staff', label: '직원·배정' }, { id: 'integrations', label: '연동 현황' }];
+type Tab = 'board' | 'staff' | 'integrations' | 'company' | 'reviews';
+const tabs: { id: Tab; label: string }[] = [{ id: 'board', label: '업무 보드' }, { id: 'staff', label: '직원·배정' }, { id: 'integrations', label: '연동 현황' }, {id:'company',label:'회사 운영'}, {id:'reviews',label:'직원 평가'}];
 
 function useMutation(session: Session, onRefresh: () => Promise<void>, onError: (error: unknown) => void) {
   const [busy, setBusy] = useState(false);
@@ -33,7 +34,7 @@ function useMutation(session: Session, onRefresh: () => Promise<void>, onError: 
 }
 function InlineError({ message }: { message: string }) { return message ? <p className="error-notice" role="alert">{message}</p> : null; }
 
-export function CollaborationWorkspace({ projectId, tasks, session, refreshKey = 0, onOpenTask, onChanged, onError }: CollaborationWorkspaceProps) {
+export function CollaborationWorkspace({ projectId, tasks, session, refreshKey = 0, onOpenTask, onChanged, onError, onSelectProject }: CollaborationWorkspaceProps) {
   const [tab, setTab] = useState<Tab>('board');
   const [staff, setStaff] = useState<StaffData | null>(null);
   const [integrations, setIntegrations] = useState<Integrations | null>(null);
@@ -87,6 +88,8 @@ export function CollaborationWorkspace({ projectId, tasks, session, refreshKey =
       })}</div><p className="collaboration-footnote">실행 범위: 격리된 node-functions-v1 함수 검증. 보드에서 최종 상태를 직접 변경하지 않습니다.</p></>}
       {tab === 'staff' && (staff ? <StaffingPanel key={projectId} projectId={projectId} data={staff} session={session} onRefresh={refresh} onError={onError} /> : <p role="status" className="muted">{loading ? '직원과 배정 정보를 확인하고 있습니다.' : '직원 정보를 확인할 수 없습니다. 다시 확인해 주세요.'}</p>)}
       {tab === 'integrations' && (integrations ? <IntegrationPanel key={projectId} projectId={projectId} tasks={tasks} data={integrations} session={session} refreshKey={revision} onRefresh={refresh} onError={onError} /> : <p role="status" className="muted">{loading ? '연결 상태를 확인하고 있습니다.' : '연결 상태를 확인할 수 없습니다. 다시 확인해 주세요.'}</p>)}
+      {tab === 'company' && <CompanyOperations key={projectId} projectId={projectId} session={session} refreshKey={refreshKey} onChanged={onChanged} onError={onError} onSelectProject={onSelectProject}/>}
+      {tab === 'reviews' && <EmployeeReviews key={projectId} projectId={projectId} session={session} refreshKey={refreshKey} onChanged={onChanged} onError={onError}/>}
     </div>
   </section>;
 }

@@ -1,0 +1,18 @@
+.company-workspace,.employee-reviews{display:grid;gap:18px;min-width:0}
+.collaboration-tabs{flex-wrap:wrap}
+.company-projects{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.company-project{border:1px solid var(--border);border-radius:8px;padding:16px;min-width:0;background:#fff}
+.company-project.is-current{border-left:3px solid #4b7565;background:#f6f9f5}
+.company-project h4{margin:0 0 10px}.company-project p{font-size:12px;overflow-wrap:anywhere}
+.company-form,.company-policy,.review-card{border:1px solid var(--border);border-radius:8px;padding:18px;min-width:0}
+.company-inline-form{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.company-inline-form input,.review-decision input:not([type=checkbox]){display:block;width:100%}
+.company-dependencies{padding-left:18px}.company-dependencies li{overflow-wrap:anywhere;margin-bottom:8px}
+.review-scores{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
+.review-scores input{width:100%;min-width:0}.review-filters,.review-flags{display:flex;gap:8px;flex-wrap:wrap}
+.review-filters [aria-pressed=true]{background:#e6eee6;border-color:#4b7565}.review-list{display:grid;gap:16px}
+.review-filters{border:0;padding:0;margin:16px 0}.review-filters legend{font-size:12px;margin-bottom:8px}
+.review-text{white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit;font-size:12px;line-height:1.8;max-width:100%}
+.review-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 20px;font-size:12px}.review-facts dd{margin:0;overflow-wrap:anywhere}
+.review-revision{border-top:1px solid var(--border);padding:12px 0}.review-decision{border-top:1px solid var(--border);margin-top:16px;padding-top:16px}
+.review-decision>.button,.review-decision>.text-button{margin-right:10px}.company-workspace li,.employee-reviews li{font-size:12px;overflow-wrap:anywhere}
+@media(max-width:600px){.review-scores{grid-template-columns:repeat(2,minmax(0,1fr))}.company-form,.company-policy,.review-card{padding:12px}.review-facts{grid-template-columns:1fr}.review-facts dd{margin-bottom:8px}}

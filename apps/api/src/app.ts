@@ -26,6 +26,8 @@ import { loadOfficeApprovals, projectOffice } from './office.js';
 import { ensureDefaultStaffing, staffingRoutes } from './staffing.js';
 import { IntegrationService } from './integrations.js';
 import { createTaskCommand } from './task-commands.js';
+import { projectOperationsRoutes } from './project-operations.js';
+import { ReviewService } from './reviews.js';
 
 export { initializeOwner, transitionTaskForVerification } from './repository.js';
 export type { ApiConfig } from './security.js';
@@ -78,7 +80,7 @@ function nextPage(row: { id: string; cursor_time: string } | undefined) {
   return row ? Buffer.from(JSON.stringify({ id: row.id, createdAt: row.cursor_time })).toString('base64url') : null;
 }
 
-export function createApp({ database, config, workflowProvider, integrations }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService }) {
+export function createApp({ database, config, workflowProvider, integrations, reviews }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService; reviews?: ReviewService }) {
   const app = new Hono<ApiEnv>();
   const integrationService = integrations ?? new IntegrationService(database, fileURLToPath(new URL('../../../', import.meta.url)));
   const loginAttempts: number[] = [];
@@ -168,6 +170,8 @@ export function createApp({ database, config, workflowProvider, integrations }: 
   app.route('/api/v1', workflowRoutes(database, workflowProvider));
   app.route('/api/v1', staffingRoutes(database));
   app.route('/api/v1', integrationService.routes());
+  app.route('/api/v1', projectOperationsRoutes(database, workflowProvider));
+  app.route('/api/v1', (reviews ?? new ReviewService(database, workflowProvider)).routes());
   app.delete('/api/v1/auth/session', async (c) => {
     const auth = c.get('auth');
     await database.sql.begin(async (tx) => {

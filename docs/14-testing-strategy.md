@@ -1,12 +1,18 @@
 # 테스트·품질·에이전트 평가
 
+## Phase 4 실제 검증 — 2026-10-19
+
+전체 단위/통합188개(이전158+Phase4 30), Chromium25개(이전20+Phase4 5), lint/typecheck/계약 TS16·Python26/build를 실행했다. Phase4는 실제 PostgreSQL의 evidence/null/rubric/불변 이력·편향/loop·권한 철회/UNKNOWN·프로젝트 격리·DAG 순환·예산 경합·명시 예약·archive/부서/퇴사 이력을 검사한다. 선행 조건에 막힌 예약31건 뒤의 실행 가능한 업무 누락도 회귀 검증한다. 기본 테스트의 공급자는 제어된 대역이며 모델을 호출하지 않는다.
+
+별도 opt-in `verify:company-live`에서 기존 Codex 구독으로 프로젝트2개의 PM/Developer/QA 코드 수정·Docker test/build0·QA PASS와 3종 AI 평가 각1회를 실행했다. 실제 5종은 DRAFT, 부족한 점수는 null, 결과 수락/merge 미실행이다. 선행 수락 전 후속 run0, 공유 실행 최대 관측1, 데스크톱/390px/page error0을 확인했다. 첫 시험의 QA 거절/NO_CODE_CHANGE와 취소·보관도 README에 남겼다. 운영 경보·완전한 장애 복구·backup restore·통계적 모델 비교·실제 구독 소진 시험은 미실행이다.
+
 ## 1. 목적
 
 AI의 주장 대신 독립적으로 확인 가능한 증거로 기능과 Phase gate를 판정한다.
 
 ## 2. 범위
 
-unit, integration, end-to-end, agent evaluation, security, recovery, performance 계층을 설계한다. 현재는 문서 검증만 가능하며 제품 테스트는 미실행이다.
+unit, integration, end-to-end, agent evaluation, security, recovery, performance 계층을 설계한다. 현재 구현·실행 범위는 위 실제 검증과 README를 따르며 아래 항목 전체가 검증 완료됐다는 뜻은 아니다.
 
 ## 3. 요구사항
 

@@ -1,0 +1,2 @@
+# Migration checksums are byte-sensitive; preserve SQL bytes on Windows checkouts.
+/packages/db/migrations/*.sql text eol=lf

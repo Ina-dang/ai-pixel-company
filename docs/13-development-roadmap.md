@@ -60,6 +60,8 @@ Phase 0 첫 순서: 버전/환경 확정 → monorepo/인증 → DB/전이 → A
 
 B 출시: R01~R11/R18 최소 통제를 실제 테스트로 충족한다. C 출시: R12~R18 확장을 충족한다. Phase 5는 초기 출시 gate에서 제외하지만 공통 command 계약을 깨지 않아야 한다.
 
+2026-10-19 구현: Phase 4 P4-01~04 직원 평가·이력·다중 프로젝트/DAG/명시 예약은 제한 Node fixture와 조직 Owner 모델로 검증했다. 운영 경보/장애 복구/backup restore/인계 P4-05~06은 남았으므로 전체 Phase 4/C 출시 완료로 판정하지 않는다. 실제 근거는 README·[체크리스트](IMPLEMENTATION_CHECKLIST.md)·ADR-014를 따른다.
+
 ## 11. 미확정 사항
 
 착수일·개발 시간·외부 App 심사·목표 저장소/부하·실제 provider 예산이 확인되지 않았다. Phase 0 종료 시 구현 속도를 근거로 일정과 비용을 다시 추정한다.

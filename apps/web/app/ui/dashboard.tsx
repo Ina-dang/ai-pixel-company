@@ -147,7 +147,7 @@ export function Dashboard() {
           <div><label htmlFor="project-picker">현재 프로젝트</label><select id="project-picker" value={projectId} onChange={event => { setProjectId(event.target.value); setError(""); setNotice(""); }}>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
           <div className="repository-meta"><span>연결 저장소</span><strong>{activeProject?.repositoryUrl || "저장소 미지정"}</strong><small>기본 브랜치 · {activeProject?.defaultBranch ?? "—"}</small></div>
         </section>}
-        {activeProject ? <ProjectWorkspace key={activeProject.id} project={activeProject} session={session} onError={onError} /> : <section className="empty-state panel"><span className="empty-mark" aria-hidden="true">＋</span><h2>첫 프로젝트를 만들어 주세요</h2><p>프로젝트를 만들면 업무 원문과 수용 기준을 등록할 수 있습니다.</p></section>}
+        {activeProject ? <ProjectWorkspace key={activeProject.id} project={activeProject} session={session} onError={onError} onSelectProject={setProjectId} /> : <section className="empty-state panel"><span className="empty-mark" aria-hidden="true">＋</span><h2>첫 프로젝트를 만들어 주세요</h2><p>프로젝트를 만들면 업무 원문과 수용 기준을 등록할 수 있습니다.</p></section>}
         <footer className="page-footer">AI PIXEL COMPANY <span>화면의 업무 상태는 서버 기록을 기준으로 표시합니다.</span></footer>
       </main>
     </div>
@@ -198,7 +198,7 @@ function ProjectForm({ session, onCreated, onError }: { session: Session; onCrea
   </section>;
 }
 
-function ProjectWorkspace({ project, session, onError }: { project: Project; session: Session; onError: (error: unknown) => void }) {
+function ProjectWorkspace({ project, session, onError, onSelectProject }: { project: Project; session: Session; onError: (error: unknown) => void; onSelectProject: (id: string) => void }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [events, setEvents] = useState<CompanyEvent[]>([]);
   const [connection, setConnection] = useState("연결 준비 중");
@@ -340,7 +340,7 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
       setSelectedTaskId(id);
       window.requestAnimationFrame(() => document.querySelector('.task-detail')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
     }} />
-    <CollaborationWorkspace projectId={project.id} tasks={tasks} session={session} refreshKey={refreshKey} onOpenTask={setSelectedTaskId} onChanged={() => { void reloadRef.current?.(); }} onError={onError} />
+    <CollaborationWorkspace projectId={project.id} tasks={tasks} session={session} refreshKey={refreshKey} onOpenTask={setSelectedTaskId} onChanged={() => { void reloadRef.current?.(); }} onError={onError} onSelectProject={onSelectProject}/>
     <section className="summary-grid" aria-label="프로젝트 현황">
       <SummaryCard label="등록된 업무" value={snapshot ? String(tasks.length) : "—"} suffix="건" caption="서버에 저장된 전체 업무" />
       <SummaryCard label="직원 실행 방식" value="Codex" caption="PM → Developer → QA · 순차 실행" subdued />

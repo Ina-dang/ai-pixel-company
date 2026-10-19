@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { pinRunStaffing, readRunStaffing } from './staffing.js';
-import type { AgentProvider, Checkpoint } from '@ai-pixel/agents';
+import { ExecutionBlocked, type AgentProvider, type Checkpoint } from '@ai-pixel/agents';
+import { dependencyBlock, reserveExecution, settleExecution } from './execution-policy.js';
 import { idSchema } from '@ai-pixel/contracts';
 import type { Database, Transaction } from '@ai-pixel/db';
 import { Hono } from 'hono';
@@ -68,12 +69,16 @@ export function workflowRoutes(database: Database, provider?: AgentProvider) {
       const tasks = await tx<{ project_id: string; command_original_ko: string; status: string }[]>`select project_id,command_original_ko,status from tasks where organization_id=${organizationId} and id=${id} for update`;
       const task = tasks[0];
       if (!task) throw new ApiError(404, 'NOT_FOUND', '업무를 찾을 수 없습니다.');
+      const dependency = await dependencyBlock(tx, organizationId, task.project_id, id);
+      if (dependency) throw new ApiError(409, dependency, '프로젝트 상태와 선행 업무 완료를 확인하세요.');
       if (!['TODO', 'FAILED'].includes(task.status)) throw new ApiError(409, 'INVALID_TRANSITION', '대기 또는 실패한 업무만 새 실행을 시작할 수 있습니다.');
       const active = await tx`select 1 from workflow_runs where organization_id=${organizationId} and task_id=${id} and status in ('QUEUED','RUNNING','PAUSED','BLOCKED','WAITING_APPROVAL')`;
       if (active.length) throw new ApiError(409, 'ACTIVE_RUN_EXISTS', '이미 진행 중인 실행이 있습니다.');
       const created = await tx<WorkflowRow[]>`insert into workflow_runs (id,organization_id,project_id,task_id,command_original_ko,fixture,checkpoint)
         values (${randomUUID()},${organizationId},${task.project_id},${id},${task.command_original_ko},${body.fixture},${tx.json(jsonValue(initialCheckpoint()))}) returning *`;
       const staffing = await pinRunStaffing(tx, organizationId, task.project_id, created[0].id);
+      try { await reserveExecution(tx, { org: organizationId, project: task.project_id, operation: created[0].id, kind: 'WORKFLOW', totalTokens: 0, profileLimit: Math.min(...staffing.map(p => p.limits.maxTokens)) }); }
+      catch (error) { throw new ApiError(409, error instanceof ExecutionBlocked ? error.reason : 'POLICY_UNVERIFIABLE', '조직·프로젝트·직원 토큰 예산을 확인하세요.'); }
       await recordWorkflow(tx, created[0], undefined, 'workflow.run.created');
       await audit(tx, c, 'workflow.run.created', 'workflow_run', created[0].id, task.project_id);
       return { status: 201, data: publicWorkflow(created[0], staffing) };
@@ -101,6 +106,7 @@ export function workflowRoutes(database: Database, provider?: AgentProvider) {
       const updated = await tx<WorkflowRow[]>`update workflow_runs set status=${status},checkpoint=${tx.json(jsonValue(checkpoint))},
         stop_lease_token=${row.lease_token ?? row.stop_lease_token}::uuid,lease_token=null,lease_expires_at=null,version=version+1,updated_at=now() where id=${id} returning *`;
       await updateTaskForRun(tx, updated[0]);
+      if (status !== 'QUEUED') await settleExecution(tx, row.organization_id, row.id, checkpoint.usage.inputTokens + checkpoint.usage.outputTokens, row.lease_token ? 'UNKNOWN' : 'SETTLED');
       await recordWorkflow(tx, updated[0]);
       await audit(tx, c, `workflow.run.${body.action}`, 'workflow_run', id, row.project_id);
       return { status: 200, data: publicWorkflow(updated[0]) };

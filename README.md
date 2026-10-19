@@ -4,7 +4,7 @@
 
 자연어 업무 지시를 PM·Developer·QA AI의 실제 개발 작업으로 연결하고, 검증된 실행 상태를 픽셀 사무실에 표시하는 AI 회사 운영 플랫폼이다.
 
-**현재 상태: Phase 0 기반·Phase 1 구독 실행 핵심 경로·Phase 2 픽셀 사무실과 화면 시범을 검증했다. Phase 3 채용·배정·칸반, GitHub App의 실제 Issue/branch/push/draft PR/현재 head 상태 조회, Slack 보고·실제 명령→업무 등록, 별도 merge 승인·실행기를 구현했다. 실제 merge는 사용자 지시로 미수행이며 일반 CI webhook의 원격 역순/철회와 상시 ingress는 남아 전체 운영 범위 완료로 판정하지 않는다. 코드 실행은 제한된 Node 함수 fixture를 지원한다.**
+**현재 상태: Phase 0 기반·Phase 1 구독 실행·Phase 2 사무실·Phase 3 채용/협업에 이어 Phase 4 직원 평가 5유형·부서 이력·다중 프로젝트 토큰 정책/DAG/명시 예약을 구현했다. 실제 Codex 프로젝트 2개의 PM/Developer/QA와 AI 평가 3회를 검증했다. 실제 merge·운영 배포는 미수행이며 운영 경보/backup restore/C 출시 gate는 남았다. 코드 실행은 제한된 Node 함수 fixture를 지원한다.**
 
 - B단계: Phase 0 기반 → Phase 1 실제 AI 실행 → Phase 2 픽셀 사무실.
 - C단계: Phase 3 GitHub·Slack·채용 → Phase 4 평가·다중 프로젝트·운영.
@@ -76,10 +76,10 @@ GitHub App의 저장소 범위와 Slack의 workspace/channel/Owner 매핑은 서
 |---|---|
 | `pnpm lint` | 통과, 오류·경고 없음 |
 | `pnpm typecheck` | 7개 workspace 및 테스트/스크립트 통과 |
-| `pnpm test` | 158개 = 사무실 시범141 + 명령/merge 경계17. HTTP 모의 merge 시험과 실제 공급자의 비merge 검증을 구분 |
+| `pnpm test` | 188개 = Phase 3 158 + Phase 4 30. 실제 PostgreSQL·제어된 공급자 시험과 실제 Codex opt-in 검증을 구분 |
 | `pnpm verify:contracts` | TypeScript fixture 16개·Python JSON Schema fixture 26개 통과 |
 | `pnpm build` | Next 프로덕션 빌드·API/공유 패키지 타입 빌드 통과 |
-| `pnpm test:e2e` | Chromium20개 = 기존5 + 사무실8 + 협업7. 명시적 승인/실행 분리·원격 차단·Slack 결과 escaping과 기존 회귀 |
+| `pnpm test:e2e` | Chromium25개 = 기존20 + Phase 4 5. 프로젝트 전환/명시 예약·정책/DAG 거부·5유형/null·게시/생성 제한·한국어 escaping·390px/키보드 |
 | `pnpm verify:agents` | Phase 1 실제 구독 PM/Developer/QA, 코드·추가 테스트 파일 수정, test/build exit0, QA PASS. 저장된 실행 수동 재개 성공, 아래 최종 결과는 사용자 지시로 수락 |
 | `pnpm verify:office-live` | 실제 Codex→브라우저 PM 작업/Developer 작업/QA 검토 관측, 동일 SHA test/build0·QA PASS, reload/390px·page error0. 새 결과는 수락 대기 |
 | `pnpm verify:staffing-live` | 실제 신규 Developer 채용/배정·Codex 코드 수정·Docker test/build0·동일 SHA QA PASS, 이름/reload/390px/page error0 확인. Owner 수락 대기 |
@@ -149,4 +149,26 @@ GitHub 실제 webhook 시험은 초기 ping의 403을 확인한 뒤 수정했다
 
 ## 구현 범위 판정
 
-**Phase 0 완료 / Phase 1 제한 fixture 핵심 경로 / Phase 2 사무실 / Phase 3 채용·칸반·GitHub 외부 쓰기 검증**. 전체 Phase 3와 범용 저장소·언어 비교·운영 B 출시를 완료했다고 주장하지 않는다. 운영 배포·merge·유료 자원 생성은 수행하지 않았다. 공식 구독 근거는 [OpenAI 인증](https://learn.chatgpt.com/docs/auth), 그래픽 계약은 [Phaser3.90 Tilemap](https://docs.phaser.io/api-documentation/3.90.0/class/tilemaps-tilemap)·[Tiled JSON](https://doc.mapeditor.org/en/stable/reference/json-map-format/)을 따른다(열람 2026-10-19, 개별 변경일 미공개).
+**Phase 0 기반 / Phase 1 제한 fixture 핵심 경로 / Phase 2 사무실 / Phase 3 협업 / Phase 4 P4-01~04 직원 평가·다중 프로젝트**. 일반 CI webhook 원격 역순/철회·상시 ingress·범용 저장소·언어 비교와 P4-05/06 운영 경보/backup restore/C 출시 gate는 미완료다. 운영 배포·실제 merge·새 유료 자원 생성은 수행하지 않았다. 공식 구독 근거는 [OpenAI 인증](https://learn.chatgpt.com/docs/auth), 그래픽 계약은 [Phaser3.90 Tilemap](https://docs.phaser.io/api-documentation/3.90.0/class/tilemaps-tilemap)·[Tiled JSON](https://doc.mapeditor.org/en/stable/reference/json-map-format/)을 따른다(열람 2026-10-19, 개별 변경일 미공개).
+
+## Phase 4 직원 평가·다중 프로젝트 — 2026-10-19
+
+`회사 운영`은 프로젝트 현황·완료 토큰/미확정 예약·조직/프로젝트 정책·DAG·명시 예약·부서 이력을 제공한다. `직원 평가`는 AUTO 사실과 SELF/PEER/PM/USER 의견·원문·불변 근거/수정본·Owner 검토를 분리한다. 필수 점수가 없으면 종합 점수는 null이며, 결과 수락 전/오래된 근거는 게시할 수 없다. 자동 게시·고용/권한/예산 변경은 없다.
+
+공유 Codex 공급자 슬롯은 **1개**다. 예약한 업무만 URGENT/HIGH/MEDIUM/LOW, 동순위 FIFO로 검사하며 선행 COMPLETED·권한·예산을 호출 직전 재검사한다. 새 프로젝트에 기존 GitHub/Slack 비밀을 복제하지 않는다. 한도/사용량 확인 실패 시 중단하고 API 키·유료 모델 fallback은 없다. 앱 토큰 정책은 구독 제공량·현금 청구 한도를 보장하지 않는다([상세](docs/16-cost-management.md)).
+
+| 실제 검증 | 결과 |
+|---|---|
+| 프로젝트 A | `9fdadab6-2d4e-4185-b41d-737a1475c702`, run `3881e145-be67-42f6-ab6d-b8d05f080a66`, manifest `0340fae6f286ef8e0414993539c2adc497e86f70fa0c463727043502bcfb35d8` |
+| 프로젝트 B | `86712e0c-2e13-4bfa-a6a2-1de409171968`, run `de550d7b-08e6-4a73-8232-e8470f26e1c1`, manifest `09aa1d597dd368c93e153a848f87a28a7dcaa057f4cd761ce0483b02e52d2d1a` |
+| 코드·격리 | 각 PM/Developer/QA 3응답, 실제 파일 수정·Docker test/build exit0·동일 후보 QA PASS; 서로 다른 workspace, 모두 WAITING_APPROVAL |
+| 큐·DAG | 실행 중 동시 관측 최대1. 후속 task `1d3c6283-5871-4c38-88eb-7b0305d7345a`는 DEPENDENCY/run0. 시험 후 intent 해제 |
+| 평가 | A의 AUTO/USER/SELF/PEER/PM 5종 DRAFT. AI 3종 각 생성1회·SUCCEEDED, 동일 모델/작은 표본/결과 미확정 표시. 필수 항목 미산정으로 종합 점수 null |
+| 토큰 | 성공 시험 프로젝트 완료 보고 A140,621+B70,866=211,487 토큰. A workflow69,744+1,173=70,917, AI3회69,704. B69,703+1,163=70,866. 청구액 미확인 |
+| 실패 포함 사용량 | 첫 시험 A95,973+B95,894=191,867. 전체 Phase4 시험 보고 토큰은 211,487+191,867=403,354이며 구독 제공량/청구액 환산값이 아니다 |
+| 실제 브라우저 | 데스크톱·390px·프로젝트 전환·5유형/게시 차단·페이지 오류0. 로컬 `test-results/phase4-company-live.png`, `phase4-reviews-live.png`, `phase4-reviews-mobile.png` |
+| 외부 안전 경계 | 기존 PR2를 read-only 재조회: draft/open/merged=false, head/base 그대로. 새 Slack/GitHub 전송·공개 터널·실제 merge 없음 |
+
+첫 시험 프로젝트 A/B(`3ae9214d-ca5c-41b5-b69c-f8d3f9d70c0b`, `891a9138-d17b-464a-b41d-c595879e9f41`)는 요청의 “실제 Codex 구독”을 PM이 소프트웨어 AC로 확장해 QA가 구독 증거 부족으로 거절했다. test/build0 뒤 재작업은 NO_CODE_CHANGE로 중단됐다. 둘 다 취소·보관했고 이력/사용량을 삭제하지 않았다. 함수 동작 요건으로 좁힌 두 번째 시험은 통과했다. 검증 스크립트의 목록/상세 snapshot 조회 오류도 수정했으며, 이미 완료된 실행으로 평가·브라우저 단계를 재개해 코드 생성을 반복하지 않았다. 위 211,487은 성공 프로젝트 소계이며 첫 실패 시험 사용량을 제외한 값이다.
+
+새 실제 실행은 `pnpm verify:company-live`로 명시 실행한다. 기본 테스트는 모델을 호출하지 않는다. `--review-existing <projectA> <projectB> <runA> <runB> <childTask>`는 이 스크립트가 만든 WAITING_APPROVAL fixture만 재조회하며 이미 있는 5종 평가를 재생성하지 않는다. 이 명령도 결과 수락·게시·merge를 수행하지 않는다.

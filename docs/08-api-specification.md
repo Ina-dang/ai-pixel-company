@@ -1,5 +1,26 @@
 # API 계약
 
+## Phase 4 실제 API — 2026-10-19
+
+모든 경로는 `/api/v1` 아래이며 Owner 세션·조직 경계를 적용한다. 변경은 Origin/CSRF/Idempotency-Key와 대상 version을 검사한다. 프로젝트 경로는 같은 조직의 project/run/task/staffing 근거를 요구한다. 새 관리자 역할이나 프로젝트 간 비밀 공유는 추가하지 않는다.
+
+| 경로 | 계약 |
+|---|---|
+| GET `/company` | 프로젝트 현황·공유 큐·월 완료 토큰/미확정 예약·부서; 최근 최대 100개 |
+| GET `/projects/:id/operations` | 조직/프로젝트 정책·DAG·명시 예약·업무 eligibility |
+| POST `/company/policy`, `/projects/:id/execution-policy` | `{expectedVersion,monthlyTokens,runTokens}`; 미설정 version0 |
+| POST `/projects/:id/dependencies/{add,remove}` | `{taskId,prerequisiteId,expectedTaskVersion}`; 같은 프로젝트 TODO/FAILED 계획만 변경 |
+| POST `/projects/:id/tasks/:taskId/schedule` | `{enabled,expectedTaskVersion}`; 예약 해제는 이미 생성된 run 취소와 별개 |
+| POST `/projects/:id/lifecycle` | `{action:archive|restore,expectedVersion}`; 활성 실행/미해결 merge는 보관 차단 |
+| POST `/departments`, `/departments/:id/archive` | 부서 생성/빈 부서 보관 |
+| POST `/employees/:id/department` | `{departmentId:null|uuid,expectedVersion}`; 새 프로필/이력 |
+| GET `/projects/:id/reviews` | 5유형·수정본·facts/opinion·현재 근거 여부·분리 집계; 최근 최대 100개 |
+| POST `/projects/:id/reviews` | `{runId,subjectEmployeeId,type,reviewerEmployeeId?,originalKo?,scores?}`; AUTO/USER 즉시 초안, AI는202 |
+| POST `/projects/:id/reviews/:reviewId/{revise,regenerate}` | USER 직접 수정 또는 AUTO 갱신/AI 재생성; 최초+수정 최대2 |
+| POST `/projects/:id/reviews/:reviewId/decision` | `{expectedVersion,action:CONFIRM|DISPUTE,originalKo}`; 게시와 결과 수락/merge는 독립 |
+
+평가를 만드는 것만으로 게시하지 않는다. 점수 누락·결과 미확정·오래된 evidence·진행/결과 불명 생성은 게시를 차단한다. AI 생성 실패는 INVALID, 종료 불명은 UNKNOWN과 공유 슬롯 차단으로 보존한다. SSE에 `company.updated`, `review.updated`, `project.schedule.updated`를 추가하고 화면은 프로젝트 전환 시 이전 조회를 중단한다.
+
 ## Phase 3 명령·merge API 보충 — 2026-10-19
 
 - `POST /api/webhooks/slack/:connectionId`: Slack raw 서명·timestamp·team/channel/Owner를 검증하고 `/ai-pixel` 명령을 durable receipt로 접수한다. HTTP200 ephemeral ACK 후 비동기 처리하며 접수 성공과 task/알림 성공을 구분한다. `response_url`은 보관하지 않는다.
