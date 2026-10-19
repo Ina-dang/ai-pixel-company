@@ -24,6 +24,7 @@ let app: ReturnType<typeof createApp>, service: IntegrationService, projectId: s
 let mode: 'success' | 'unknown' | 'rate' | 'revoked' | 'base-mismatch' | 'revoke-during-push' | 'confirm-unavailable' = 'success';
 let confirmationFails = false;
 let remoteHead = BASE;
+let baseHead = BASE, mergeDraft = true, mergeable = true, ciPass = true, merged = false, mergeTimeout = false, protectedBranch = false, ciEvidenceId = 1, rules: unknown[] = [];
 let calls: Array<{ path: string; method: string }> = [];
 let issues: Array<Record<string, unknown>> = [];
 const respond = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers });
@@ -37,6 +38,15 @@ const fetcher: typeof fetch = async (url, init = {}) => {
   if (mode === 'rate') return respond({}, 429, { 'retry-after': '90' });
   if (mode === 'revoked') return respond({ message: 'not exposed provider detail' }, 403);
   const body = init.body ? JSON.parse(String(init.body)) : {};
+  if (path === '/repos/Ina-dang/ai-pixel-company/branches/main') return respond({ commit: { sha: baseHead }, protected: protectedBranch });
+  if (path === '/repos/Ina-dang/ai-pixel-company/rules/branches/main') return respond(rules);
+  if (path === '/repos/Ina-dang/ai-pixel-company/pulls/9' && method === 'GET') return respond({ number: 9, state: merged ? 'closed' : 'open', merged, merge_commit_sha: merged ? '9'.repeat(40) : null,
+    draft: mergeDraft, mergeable, mergeable_state: mergeable ? 'clean' : 'blocked', head: { ref: `ai-pixel/${runId}`, sha: remoteHead, repo: { id: 34 } }, base: { ref: 'main', sha: baseHead, repo: { id: 34 } } });
+  if (path === '/repos/Ina-dang/ai-pixel-company/pulls/9/merge') {
+    expect(method).toBe('PUT'); expect(body).toEqual({ sha: COMMIT, merge_method: 'squash' });
+    merged = true; if (mergeTimeout) throw new Error('controlled merge timeout after remote effect');
+    return respond({ merged: true, sha: '9'.repeat(40) });
+  }
   if (path.endsWith('/issues') && method === 'POST') {
     const result = { number: 8, html_url: 'https://github.com/Ina-dang/ai-pixel-company/issues/8', body: body.body }; issues.push(result);
     if (mode === 'unknown') throw new Error('simulated timeout after remote creation');
@@ -50,10 +60,10 @@ const fetcher: typeof fetch = async (url, init = {}) => {
   if (path.endsWith('/git/blobs')) return respond({ sha: 'b'.repeat(40) });
   if (path.endsWith('/git/trees')) { if (mode === 'revoke-during-push') await database.sql`update workflow_runs set version=version+1,status='PAUSED' where id=${runId}`; return respond({ sha: 'c'.repeat(40) }); }
   if (path.endsWith('/git/commits') && method === 'POST') return respond({ sha: COMMIT });
-  if (path.includes('/git/commits/')) return respond({ tree: { sha: 'c'.repeat(40) }, message: 'remote commit' });
+  if (path.includes('/git/commits/')) return respond({ tree: { sha: 'c'.repeat(40) }, message: 'remote commit', parents: [{ sha: BASE }] });
   if (path.includes('/git/refs/heads/ai-pixel/') && method === 'PATCH') { remoteHead = body.sha; if (mode === 'confirm-unavailable') confirmationFails = true; expect(body.force).toBe(false); return respond({ object: { sha: remoteHead } }); }
   if (path.endsWith('/pulls') && method === 'POST') { expect(body.draft).toBe(true); return respond({ number: 9, html_url: 'https://github.com/Ina-dang/ai-pixel-company/pull/9', head: { sha: remoteHead }, base: { ref: 'main' } }); }
-  if (path.includes('/check-runs?')) return respond({ check_runs: [{ id: 1, name: 'unit', head_sha: remoteHead, status: 'completed', conclusion: 'success' }] });
+  if (path.includes('/check-runs?')) return respond({ check_runs: [{ id: ciEvidenceId, name: 'unit', head_sha: remoteHead, status: 'completed', conclusion: ciPass ? 'success' : 'failure' }] });
   if (path.includes('/status?')) return respond({ statuses: [] });
   if (path === '/api/chat.postMessage') { if (mode === 'unknown') throw new Error('unknown Slack send'); return respond({ ok: true, channel: 'C123', ts: '1234567890.000001' }); }
   throw new Error(`Unexpected controlled transport path: ${method} ${path}`);
@@ -80,7 +90,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await database.sql`truncate organizations,users cascade`; await initializeOwner(database);
   projectId = randomUUID(); runId = randomUUID(); githubId = randomUUID(); slackId = randomUUID(); const taskId = randomUUID();
-  remoteHead = BASE; calls = []; issues = []; mode = 'success'; confirmationFails = false;
+  remoteHead = BASE; baseHead = BASE; mergeDraft = true; mergeable = true; ciPass = true; merged = false; mergeTimeout = false; protectedBranch = false; ciEvidenceId = 1; rules = [];
+  calls = []; issues = []; mode = 'success'; confirmationFails = false;
   const checkpoint = { ...initialCheckpoint(), stage: 'QA', workspace: { sha: MANIFEST, diff: '+fixed addition', files: FILES },
     verification: { sha: MANIFEST, test: { exitCode: 0, output: 'passed' }, build: { exitCode: 0, output: '' }, sandbox: { networkDisabled: true, readOnlyRoot: true, resourceLimited: true }, verifiedAt: new Date().toISOString() },
     roles: [{ role: 'QA', threadId: 'controlled-role-evidence', turnId: null, candidateSha: MANIFEST, usage: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 }, completedAt: new Date().toISOString(), output: { summaryKo: '검토 완료', specEn: '', acceptanceCriteria: [], files: [], verdict: 'PASS', candidateSha: MANIFEST, issues: [] } }] };
@@ -158,7 +169,7 @@ describe('Phase 3 durable integration boundaries', () => {
         'X-Slack-Signature': `v0=${createHmac('sha256', SIGNING).update(`v0:${time}:${raw}`).digest('hex')}` }, body: raw });
     };
     expect((await send('C999')).status).toBe(403); expect((await send('C123', String(Number(timestamp) - 301))).status).toBe(403);
-    expect((await send()).status).toBe(202); expect(await (await send()).json()).toMatchObject({ duplicate: true });
+    expect((await send()).status).toBe(200); expect(await (await send()).json()).toMatchObject({ duplicate: true });
     await database.sql`update memberships set status='REVOKED' where organization_id=${ORG} and user_id=${USER}`;
     expect((await send()).status).toBe(403); expect(calls).toEqual([]);
   });
@@ -227,5 +238,144 @@ describe('Phase 3 durable integration boundaries', () => {
     const pushed = await processed('PUSH_CANDIDATE'); expect(pushed).toMatchObject({ status: 'UNKNOWN', errorCode: 'EFFECT_UNKNOWN' }); expect(remoteHead).toBe(COMMIT);
     confirmationFails = false; mode = 'success'; await operation('PUSH_CANDIDATE', 409);
     expect(calls.filter(call => call.method === 'PATCH')).toHaveLength(1);
+  });
+});
+
+async function slackCommand(text: string, trigger = randomUUID()) {
+  const raw = new URLSearchParams({ team_id: 'T123', user_id: 'U123', channel_id: 'C123', command: '/ai-pixel', text, trigger_id: trigger,
+    response_url: 'https://hooks.slack.com/commands/private-response-secret' }).toString();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  return app.request(`http://127.0.0.1:3001/api/webhooks/slack/${slackId}`, { method: 'POST', body: raw, headers: {
+    'Content-Type': 'application/x-www-form-urlencoded', 'X-Slack-Request-Timestamp': timestamp,
+    'X-Slack-Signature': `v0=${createHmac('sha256', SIGNING).update(`v0:${timestamp}:${raw}`).digest('hex')}`,
+  } });
+}
+async function mergeFixture() {
+  mergeDraft = false;
+  await database.sql`update workflow_runs set status='SUCCEEDED' where id=${runId}`;
+  for (const kind of ['BRANCH_CREATE', 'PUSH_CANDIDATE', 'DRAFT_PR_CREATE', 'MERGE_REQUEST']) expect((await processed(kind)).status).toBe('SUCCEEDED');
+  return (await status()).mergeRequests[0];
+}
+async function mergeAction(row: { id: string; version: number; scopeHash: string }, action: string) {
+  const response = await request(`/projects/${projectId}/integrations/merges/${row.id}/${action}`, { expectedVersion: row.version, scopeHash: row.scopeHash });
+  return { status: response.status, ...(await response.json()) };
+}
+describe('Phase 3 Slack commands and explicit merge execution', () => {
+  test('preserves Korean original and creates one TODO through the shared command, never auto-starting work', async () => {
+    const original = '  실제 업무 원문\n공백과 줄바꿈을 보존해 주세요.  ', trigger = randomUUID();
+    expect((await slackCommand(`업무 ${original}`, trigger)).status).toBe(200);
+    expect((await (await slackCommand(`업무 ${original}`, trigger)).json()).duplicate).toBe(true);
+    expect(calls).toEqual([]); // ACK does not wait on Slack or a model.
+    await service.processOnce(); await service.processOnce();
+    const tasks = await database.sql`select * from tasks where source='SLACK'`;
+    expect(tasks).toHaveLength(1); expect(tasks[0]).toMatchObject({ command_original_ko: original, title: '실제 업무 원문', status: 'TODO', created_by: USER });
+    expect(await database.sql`select id from workflow_runs`).toHaveLength(1);
+    const receipts = await database.sql`select * from integration_inbox where provider='SLACK'`;
+    expect(receipts[0]).toMatchObject({ status: 'PROCESSED', reply_status: 'SENT', result: { taskId: tasks[0].id } });
+    expect(JSON.stringify(receipts)).not.toContain('response-secret'); expect(JSON.stringify(receipts)).not.toContain('hooks.slack.com');
+    expect(calls.filter(call => call.path === '/api/chat.postMessage')).toHaveLength(1);
+    expect((await status()).commands[0].result.taskId).toBe(tasks[0].id);
+  });
+  test('rechecks queued Slack mapping version and current Owner membership before creating a task', async () => {
+    await slackCommand('task 연결 변경 후 실행하면 안 됨');
+    await database.sql`update integration_connections set version=version+1 where id=${slackId}`;
+    await service.processOnce();
+    expect(await database.sql`select id from tasks where source='SLACK'`).toHaveLength(0);
+    expect((await status()).commands[0]).toMatchObject({ status: 'FAILED', errorCode: 'SLACK_MAPPING_CHANGED' });
+    expect(calls).toEqual([]);
+  });
+  test('unsupported approval commands and secrets are rejected, while help/status use the durable reply path', async () => {
+    expect((await slackCommand('merge approve all')).status).toBe(400);
+    expect((await slackCommand(`업무 xoxb-${'a'.repeat(30)}`)).status).toBe(400);
+    for (const text of ['도움말', '상태']) { expect((await slackCommand(text)).status).toBe(200); await service.processOnce(); await service.processOnce(); }
+    expect((await status()).commands).toHaveLength(2);
+    expect(calls.filter(call => call.path === '/api/chat.postMessage')).toHaveLength(2);
+    expect(calls.some(call => call.path.includes('/merge'))).toBe(false);
+  });
+  test('a queued Slack task loses authority when its mapped Owner membership is revoked', async () => {
+    await slackCommand('업무 권한 철회 후 등록 금지');
+    await database.sql`update memberships set status='REVOKED' where organization_id=${ORG} and user_id=${USER}`;
+    await service.processOnce();
+    expect(await database.sql`select id from tasks where source='SLACK'`).toHaveLength(0);
+    expect((await database.sql`select status,error_code from integration_inbox where provider='SLACK'`)[0]).toMatchObject({ status: 'FAILED', error_code: 'SLACK_MAPPING_DENIED' });
+    expect(calls).toEqual([]);
+  });
+  test('a possibly delivered command reply stays UNKNOWN without repeating task creation or Slack send', async () => {
+    await slackCommand('업무 알림 결과 불명 시험'); await service.processOnce(); mode = 'unknown'; await service.processOnce();
+    expect((await status()).commands[0]).toMatchObject({ status: 'PROCESSED', replyStatus: 'UNKNOWN' });
+    expect(await service.processOnce()).toBe(false);
+    expect(await database.sql`select id from tasks where source='SLACK'`).toHaveLength(1);
+    expect(calls.filter(call => call.path === '/api/chat.postMessage')).toHaveLength(1);
+  });
+  test('requires separate Owner approval and execution; a validated scope alone never merges', async () => {
+    const row = await mergeFixture();
+    expect((await mergeAction(row, 'validate')).data).toMatchObject({ ready: true, remoteMergeExecuted: false });
+    expect((await mergeAction(row, 'execute')).status).toBe(403);
+    const approved = await mergeAction(row, 'approve'); expect(approved.status).toBe(200); expect(approved.data.status).toBe('APPROVED');
+    expect(await service.processOnce()).toBe(false); expect(merged).toBe(false);
+    const queued = await mergeAction(approved.data, 'execute'); expect(queued.status).toBe(202);
+    await service.processOnce();
+    const result = (await status()).mergeRequests[0]; expect(result).toMatchObject({ status: 'SUCCEEDED', result: { merged: true, mergeSha: '9'.repeat(40) } });
+    expect(calls.filter(call => call.path.endsWith('/merge'))).toHaveLength(1);
+    expect((await mergeAction(queued.data, 'execute')).status).toBe(409);
+    expect(await database.sql`select id from audit_logs where action='integration.merge.executed' and actor_id=${USER}`).toHaveLength(1);
+  });
+  test.each(['head','base','rules','ci','ci-run','protection'] as const)('invalidates an approved scope when remote %s changes before dispatch', async kind => {
+    const row = await mergeFixture(), approved = (await mergeAction(row, 'approve')).data;
+    const queued = await mergeAction(approved, 'execute'); expect(queued.status).toBe(202);
+    if (kind === 'head') remoteHead = '5'.repeat(40);
+    if (kind === 'base') baseHead = '6'.repeat(40);
+    if (kind === 'rules') rules = [{ type: 'required_status_checks', parameters: { strict_required_status_checks_policy: true } }];
+    if (kind === 'ci') ciPass = false;
+    if (kind === 'ci-run') ciEvidenceId++;
+    if (kind === 'protection') protectedBranch = true;
+    await service.processOnce(); expect((await status()).mergeRequests[0].status).toBe('FAILED');
+    expect(calls.some(call => call.path.endsWith('/merge'))).toBe(false);
+  });
+  test('draft or locally unaccepted results cannot be approved and accepting a result does not grant merge authority', async () => {
+    mergeDraft = true;
+    for (const kind of ['BRANCH_CREATE','PUSH_CANDIDATE','DRAFT_PR_CREATE','MERGE_REQUEST']) await processed(kind);
+    const row = (await status()).mergeRequests[0];
+    expect((await mergeAction(row, 'validate')).data.blockers).toEqual(['RESULT_ACCEPTANCE_REQUIRED','DRAFT_PULL_REQUEST']);
+    expect((await mergeAction(row, 'approve')).status).toBe(409);
+    expect((await status()).mergeRequests[0].status).toBe('REQUESTED'); expect(merged).toBe(false);
+  });
+  test('expires or revokes approval and refuses a revoked approver session at the execution boundary', async () => {
+    const row = await mergeFixture(), approved = (await mergeAction(row, 'approve')).data;
+    await mergeAction(approved, 'execute');
+    await database.sql`update sessions set revoked_at=now() where user_id=${USER}`;
+    await service.processOnce();
+    const result = (await database.sql`select status,error_code from integration_merge_requests where id=${row.id}`)[0];
+    expect(result).toMatchObject({ status: 'FAILED', error_code: 'MERGE_APPROVER_REVOKED' }); expect(merged).toBe(false);
+  });
+  test('a cancelled or expired request cannot execute and exposes no cross-project authority', async () => {
+    const row = await mergeFixture();
+    const cross = await request(`/projects/${randomUUID()}/integrations/merges/${row.id}/validate`, { expectedVersion: row.version, scopeHash: row.scopeHash }); expect(cross.status).toBe(404);
+    const revoked = await mergeAction(row, 'revoke'); expect(revoked.data.status).toBe('REVOKED');
+    expect((await mergeAction(revoked.data, 'approve')).status).toBe(409);
+    await processed('MERGE_REQUEST'); const replacement = (await status()).mergeRequests[0];
+    await database.sql`update integration_merge_requests set expires_at=now()-interval '1 second' where id=${replacement.id}`;
+    expect((await mergeAction(replacement, 'approve')).error.code).toBe('MERGE_APPROVAL_EXPIRED');
+    expect((await status()).mergeRequests[0].status).toBe('EXPIRED'); expect(merged).toBe(false);
+  });
+  test('recovers an interrupted dispatch as UNKNOWN and only reads remote state for reconciliation', async () => {
+    const row = await mergeFixture(), approved = (await mergeAction(row, 'approve')).data;
+    await mergeAction(approved, 'execute');
+    await database.sql`update integration_merge_requests set status='RUNNING' where id=${row.id}`;
+    await service.merges.recover();
+    const interrupted = (await status()).mergeRequests[0]; expect(interrupted.status).toBe('UNKNOWN');
+    expect((await mergeAction(interrupted, 'reconcile')).data.status).toBe('UNKNOWN');
+    expect(await service.processOnce()).toBe(false); expect(calls.some(call => call.path.endsWith('/merge'))).toBe(false);
+  });
+  test('merge timeout is UNKNOWN, is never resent after restart, and leaves task/run acceptance separate', async () => {
+    const row = await mergeFixture(), approved = (await mergeAction(row, 'approve')).data;
+    await mergeAction(approved, 'execute'); mergeTimeout = true; await service.processOnce();
+    expect((await status()).mergeRequests[0]).toMatchObject({ status: 'UNKNOWN', errorCode: 'EFFECT_UNKNOWN' });
+    await service.start(); await service.stop(); expect(await service.processOnce()).toBe(false);
+    expect(calls.filter(call => call.path.endsWith('/merge'))).toHaveLength(1);
+    expect((await database.sql`select status from tasks where project_id=${projectId}`)[0].status).toBe('APPROVAL_REQUIRED');
+    const uncertain = (await status()).mergeRequests[0];
+    expect((await mergeAction(uncertain, 'reconcile')).data).toMatchObject({ status: 'SUCCEEDED', result: { observedRemote: true } });
+    expect(calls.filter(call => call.path.endsWith('/merge'))).toHaveLength(1);
   });
 });

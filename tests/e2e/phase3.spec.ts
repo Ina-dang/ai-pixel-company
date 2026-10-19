@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import type { Employee, IntegrationOperation, Integrations, StaffAssignment, StaffRole, StaffTemplate } from '../../apps/web/app/ui/collaboration-model';
+import type { Employee, IntegrationOperation, Integrations, MergeRequest, SlackCommandReceipt, StaffAssignment, StaffRole, StaffTemplate } from '../../apps/web/app/ui/collaboration-model';
 import type { Task, WorkflowRun } from '../../apps/web/app/ui/api';
 import type { OfficeAgent } from '../../packages/contracts/src/index';
 
@@ -58,9 +58,15 @@ function unknownOperation(): IntegrationOperation {
   return { id: operationId, provider: 'GITHUB', kind: 'DRAFT_PR_CREATE', status: 'UNKNOWN', runId, candidateSha: sha, errorCode: 'REMOTE_RESULT_UNKNOWN',
     externalRef: null, attempts: 1, createdAt: now, updatedAt: now };
 }
+function mergeRequest(): MergeRequest {
+  return { id: operationId, operationId, runId, scopeHash: 'a'.repeat(64), version: 1, status: 'REQUESTED', expiresAt: new Date(Date.now() + 600000).toISOString(), approvedBy: null, approvedAt: null, errorCode: null, result: null,
+    scope: { installationId: 123, repositoryId: 456, base: 'main', branch: `ai-pixel/${runId}`, headSha: 'b'.repeat(40), baseSha: 'c'.repeat(40), candidateSha: sha, runVersion: 7, pullNumber: 2, mergeMethod: 'squash', policyVersion: 'v1', requiredChecks: ['unit'],
+      remote: { draft: false, protected: false, protectionHash: 'e'.repeat(64), mergeable: true, mergeableState: 'clean', ci: { status: 'PASS' } } } };
+}
 async function mockCollaboration(page: Page, configured = false) {
   const state = { employees: [] as Employee[], profiles: [] as Employee['profile'][], assignments: [] as StaffAssignment[], operations: [] as IntegrationOperation[],
-    requests: [] as { path: string; method: string; body: Record<string, unknown>; csrf?: string; key?: string }[], rejectOperation: false, rejectAssignment: false };
+    requests: [] as { path: string; method: string; body: Record<string, unknown>; csrf?: string; key?: string }[], rejectOperation: false, rejectAssignment: false,
+    mergeRequests: [] as MergeRequest[], commands: [] as SlackCommandReceipt[], mergeBlockers: [] as string[], rejectMerge: false };
   await page.route('**/api/v1/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname.replace('/api/v1', '');
     const fulfill = (data: unknown, pagination?: unknown) => route.fulfill({ json: { data, ...(pagination ? { pagination } : {}) } });
@@ -75,7 +81,7 @@ async function mockCollaboration(page: Page, configured = false) {
       if (path === `/projects/${projectId}/integrations`) {
         const data: Integrations = { connections: [{ id: 'github', provider: 'GITHUB', configured, enabled: configured, version: 1,
           publicConfig: configured ? { repository: 'Ina-dang/fixture', baseBranch: 'main', installationId: 123, policyVersion: 1 } : {}, reason: configured ? null : 'CREDENTIAL_UNCONFIGURED' },
-        { id: 'slack', provider: 'SLACK', configured: false, enabled: false, version: 1, publicConfig: {}, reason: 'CREDENTIAL_UNCONFIGURED' }], operations: state.operations,
+        { id: 'slack', provider: 'SLACK', configured: false, enabled: false, version: 1, publicConfig: {}, reason: 'CREDENTIAL_UNCONFIGURED' }], operations: state.operations, mergeRequests: state.mergeRequests, commands: state.commands,
         setup: { githubEnv: ['GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'], slackEnv: ['SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET'] } };
         return fulfill(data);
       }
@@ -84,9 +90,16 @@ async function mockCollaboration(page: Page, configured = false) {
       if (path.startsWith('/tasks/') && path.endsWith('/runs')) return fulfill({ items: [pendingRun()] });
       return route.continue();
     }
-    if (path.startsWith('/employees') || path.startsWith(`/projects/${projectId}/staffing`) || path.startsWith(`/projects/${projectId}/integrations/operations`)) {
+    if (path.startsWith('/employees') || path.startsWith(`/projects/${projectId}/staffing`) || path.startsWith(`/projects/${projectId}/integrations/operations`) || path.includes('/integrations/merges/')) {
       const body = request.postDataJSON() as Record<string, unknown>;
       state.requests.push({ path, body, method: request.method(), csrf: request.headers()['x-csrf-token'], key: request.headers()['idempotency-key'] });
+      if (path.includes('/integrations/merges/')) {
+        if (state.rejectMerge) return route.fulfill({ status: 409, json: { error: { messageKo: 'head SHA가 변경되어 승인이 무효입니다.' } } });
+        const row = state.mergeRequests[0];
+        if (path.endsWith('/validate')) return fulfill({ ready: state.mergeBlockers.length === 0, blockers: state.mergeBlockers, remoteMergeExecuted: false });
+        state.mergeRequests[0] = { ...row, status: path.endsWith('/approve') ? 'APPROVED' : path.endsWith('/execute') ? 'QUEUED' : 'REVOKED', version: row.version + 1 };
+        return fulfill(state.mergeRequests[0]);
+      }
       if (path === '/employees') {
         const template = templates.find(item => item.role === body.template) ?? templates[0];
         const profile = { employeeId, role: template.role, nameKo: String(body.nameKo), profileVersion: 1, provider: template.provider, model: template.model,
@@ -224,6 +237,47 @@ test('unconfigured connections explain setup and UNKNOWN history never auto-reis
   await area.getByRole('button', { name: '원격 결과 다시 확인', exact: true }).click();
   expect(state.requests).toHaveLength(1); expect(state.requests[0].path).toContain('/reconcile');
   await expect(area.getByText('원격 결과 확인 필요', { exact: true })).toBeVisible();
+});
+
+test('merge approval and execution remain separate after scope validation and keyboard confirmation', async ({ page }) => {
+  const state = await mockCollaboration(page, true); state.mergeRequests = [mergeRequest()];
+  const area = await openCollaboration(page, '연동 현황');
+  const card = area.getByRole('listitem', { name: 'PR 2 merge 승인', exact: true });
+  const approve = card.getByRole('button', { name: '이 범위의 merge 승인', exact: true });
+  await expect(approve).toBeDisabled(); await expect(card.getByRole('checkbox')).toBeDisabled();
+  await card.getByRole('button', { name: 'merge 범위 재검증', exact: true }).click();
+  await expect(card.getByText('원격 범위와 권한을 확인했습니다. 아직 merge하지 않았습니다.', { exact: true })).toBeVisible();
+  await card.getByRole('checkbox').focus(); await page.keyboard.press('Space'); await approve.click();
+  const execute = card.getByRole('button', { name: '승인 범위로 실제 merge 실행', exact: true });
+  await expect(execute).toBeDisabled(); expect(state.requests.some(row => row.path.endsWith('/execute'))).toBe(false);
+  await card.getByRole('button', { name: 'merge 범위 재검증', exact: true }).click();
+  await card.getByRole('checkbox').check(); await execute.click();
+  await expect(card.getByText('실행 대기', { exact: true })).toBeVisible();
+  const mutations = state.requests.filter(row => /\/(approve|execute)$/.test(row.path));
+  expect(mutations).toHaveLength(2); expect(mutations[0].body).toEqual({ expectedVersion: 1, scopeHash: 'a'.repeat(64) });
+  expect(mutations[1].body.expectedVersion).toBe(2); expect(mutations.every(row => !!row.csrf && !!row.key)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('server scope denial and draft blockers cannot enable merge approval', async ({ page }) => {
+  const state = await mockCollaboration(page, true); state.mergeRequests = [mergeRequest()]; state.mergeBlockers = ['DRAFT_PULL_REQUEST'];
+  const area = await openCollaboration(page, '연동 현황'), card = area.getByRole('listitem', { name: 'PR 2 merge 승인', exact: true });
+  await card.getByRole('button', { name: 'merge 범위 재검증', exact: true }).click();
+  await expect(card.getByText('Draft PR을 검토 가능한 상태로 전환한 뒤 새 승인 범위를 요청하세요.', { exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: '이 범위의 merge 승인', exact: true })).toBeDisabled();
+  state.mergeBlockers = []; state.rejectMerge = true;
+  await card.getByRole('button', { name: 'merge 범위 재검증', exact: true }).click();
+  await expect(card.getByText('head SHA가 변경되어 승인이 무효입니다.', { exact: true })).toBeVisible();
+  await expect(card.getByRole('checkbox')).toBeDisabled(); expect(state.requests.every(row => row.path.endsWith('/validate'))).toBe(true);
+});
+
+test('Slack receipt outcomes render as escaped text and do not imply execution or merge acceptance', async ({ page }) => {
+  const state = await mockCollaboration(page, true); state.commands = [{ id: operationId, eventType: '/ai-pixel', status: 'PROCESSED', errorCode: 'EFFECT_UNKNOWN',
+    result: { taskId: tasks[0].id, text: '업무 등록: <script>throw new Error("unsafe")</script>\n상태: 할 일' }, replyStatus: 'UNKNOWN', createdAt: now }];
+  const area = await openCollaboration(page, '연동 현황'), history = area.getByRole('region', { name: 'Slack 명령 처리 기록', exact: true });
+  await expect(history.getByText('업무 등록: <script>throw new Error("unsafe")</script>\n상태: 할 일', { exact: true })).toBeVisible();
+  await expect(history.getByText(/전송 결과 불명 · 자동 재전송 없음/)).toBeVisible();
+  await expect(history.locator('script')).toHaveCount(0); expect(state.requests).toHaveLength(0);
 });
 
 test('external operation gate denial is visible and UNKNOWN blocks duplicate requests', async ({ page }) => {

@@ -1,5 +1,11 @@
 # 데이터베이스 설계
 
+## Phase 3 명령·merge 저장 계약 보충 — 2026-10-19
+
+Migration0005는 기존 task/run/승인 데이터를 삭제하지 않고 연동 저장 상태를 확장한다. inbox는 `connection_version`, `result`, `reply_status(NONE/PENDING/SENDING/SENT/FAILED/UNKNOWN)`, `reply_ref`를 추가한다. command payload는 actor mapping·정규 명령과 업무 원문을 저장하고 response_url/토큰/서명은 제외한다. task 생성과 receipt의 PROCESSED/result/outbox PENDING 전환은 같은 transaction이다.
+
+merge 요청은 REQUESTED/APPROVED/QUEUED/RUNNING/SUCCEEDED/FAILED/UNKNOWN/REVOKED/EXPIRED/STALE과 단조 version, approved_by/session/at, result/error_code를 보존한다. 15분 만료와 scope_hash는 실행 시 다시 검사한다. 승인은 결과 수락 approval과 별도 테이블/감사 이력이며 workflow/task를 완료로 바꾸지 않는다. RUNNING 재시작은 UNKNOWN으로, SENDING 알림 재시작도 UNKNOWN으로 바꿔 원격 효과를 반복하지 않는다. 변경된 범위의 새 MERGE_REQUEST는 허용하되 QUEUED/RUNNING/UNKNOWN/SUCCEEDED가 있으면 재요청을 차단한다.
+
 ## Phase 1 실제 migration 보충 — 2026-10-19
 
 0002_subscription_workflows.sql은 workflow_runs와 workflow_acceptances를 추가한다. run은 org/project/task 복합 FK, 활성 run/task 유일성, status/version, JSON checkpoint, private lease/expiry/stop token을 저장한다. 수락은 run별 단일 소비이며 candidate SHA256·Owner·session을 연결한다. FOR UPDATE SKIP LOCKED claim, 60초 lease와 token fencing, 중단 확인 뒤 stop token 소비를 구현했다. 만료된 RUNNING은 BLOCKED/RECOVERY_REQUIRED로 보존한다. 종료 불명 또는 stop token 미해소 행이 있으면 공유 구독의 새 claim을 차단한다.

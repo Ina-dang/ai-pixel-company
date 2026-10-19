@@ -2,7 +2,13 @@
 
 ## Phase 3 구현·설정 경계 — 2026-10-19
 
-GitHub App 전용 JWT/installation token, 지정 repository ID·소유자·이름·브랜치 범위, webhook 서명과 durable inbox, Issue/검증 후보 branch/push/draft PR/CI 조회 adapter를 구현한다. `gh` 로그인이나 PAT를 서비스의 App 인증 대체 수단으로 사용하지 않는다. 설정이 없으면 미설정으로 표시하고 원격 쓰기를 거부한다. merge 요청은 대상 head/정책/CI scope를 보존하되 현재 자동 merge 또는 승인 실행기는 제공하지 않는다.
+GitHub App 전용 JWT/installation token, 지정 repository ID·소유자·이름·브랜치 범위, webhook 서명과 durable inbox, Issue/검증 후보 branch/push/draft PR/CI 조회 adapter를 구현했다. `gh` 로그인이나 PAT를 서비스의 App 인증 대체 수단으로 사용하지 않는다. 설정이 없으면 미설정으로 표시하고 원격 쓰기를 거부한다. merge는 범위 재검증 → Owner 승인 → 별도 실행 요청 → 서버 큐의 재검사 순서다. 결과 수락은 merge 승인이 아니다. 실제 merge는 별도 Owner 승인 전 수행하지 않는다.
+
+승인 scope는 installation/repository/connection version, PR 번호·branch·head/base SHA, 검증 후보·run version, squash 방법·정책 버전·필수 CI의 결과와 검사 식별자, 실제 보호/ruleset 해시를 묶는다. 15분 후 만료되며 SHA·CI·정책·권한 변경은 차단한다. Draft·로컬 미수락·mergeability 불명은 승인할 수 없다. 보호 브랜치는 기존 권한으로 정책을 확인할 수 없으면 `BRANCH_PROTECTION_READ_REQUIRED`로 차단한다. 관리자가 별도 승인받아 Administration read를 설치하고 로컬 `protectionRead: true`를 설정한 경우에만 해당 읽기 권한을 요청한다. 권한을 자동 확대하지 않는다.
+
+재시작 중단·timeout은 UNKNOWN으로 남겨 PUT을 자동 반복하지 않는다. 명시적 원격 조회 조정은 PR head/base 범위와 squash commit의 단일 부모(base SHA)를 확인하며 재merge하지 않는다. GitHub REST merge의 `sha`는 head에 대한 서버 측 조건이고 base SHA의 원자적 조건은 지원하지 않는다. 최종 조회와 PUT 사이 원격 base 변경 경합을 완전히 제거했다고 주장하지 않는다. GitHub의 보호 정책을 우회하지 않으며 운영 보호 정책 도입은 별도 범위다.
+
+실제 시험 저장소 PR #2의 head/base·CI·보호/ruleset 조회와 브라우저 차단을 검증했다. 실제 merge 성공은 시험하지 않았다. 자세한 근거와 제한은 README를 따른다. 공식 [Merge API](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)·[Branch protection 권한](https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection)은 2026-10-19 열람했으며 개별 변경일은 미공개다.
 
 로컬 설정은 Git에서 제외된 `.local/integrations.json`의 `connections` 배열이다. 각 연결은 `organizationId`, `projectId`, `provider: GITHUB`, `config: {appId,installationId,repositoryId,owner,repo,baseBranch,requiredChecks,policyVersion}`, `secretRefs: {privateKey,webhookSecret}`를 사용한다. 비밀 참조는 `env:AI_PIXEL_GITHUB_PRIVATE_KEY`, `env:AI_PIXEL_GITHUB_WEBHOOK_SECRET` 또는 `.local/integration-secrets/` 아래 파일의 `file:파일명` 형식이다. 실제 키를 코드·화면·채팅에 붙이지 않는다.
 

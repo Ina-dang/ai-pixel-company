@@ -13,7 +13,10 @@ export type StaffAssignment = { role: StaffRole; employeeId: string; employeeNam
 export type IntegrationConnection = { id: string | null; provider: 'GITHUB' | 'SLACK'; configured: boolean; webhookConfigured?: boolean; enabled: boolean; version: number; publicConfig: Record<string, unknown> | null; reason: string | null };
 export type IntegrationOperation = { id: string; provider: 'GITHUB' | 'SLACK'; kind: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'DEFERRED';
   runId: string | null; candidateSha: string | null; errorCode: string | null; externalRef: unknown; attempts: number; createdAt: string; updatedAt: string };
-export type Integrations = { connections: IntegrationConnection[]; operations: IntegrationOperation[]; setup: { githubEnv: string[]; slackEnv: string[] } };
+export type MergeRequest = { id: string; operationId: string; runId: string; scopeHash: string; version: number; status: string; expiresAt: string; approvedBy: string | null; approvedAt: string | null; errorCode: string | null; result: unknown;
+  scope: { installationId: number; repositoryId: number; base: string; branch: string; headSha: string; baseSha: string; candidateSha: string; runVersion: number; pullNumber: number; mergeMethod: string; policyVersion: string; requiredChecks: string[]; remote: { draft: boolean; protected: boolean; protectionHash: string; mergeable: boolean; mergeableState: string; ci: { status: string } } } };
+export type SlackCommandReceipt = { id: string; eventType: string; status: string; errorCode: string | null; result: { text: string; taskId?: string } | null; replyStatus: string; createdAt: string };
+export type Integrations = { connections: IntegrationConnection[]; operations: IntegrationOperation[]; mergeRequests?: MergeRequest[]; commands?: SlackCommandReceipt[]; setup: { githubEnv: string[]; slackEnv: string[] } };
 
 export const staffRoles: StaffRole[] = ['PM', 'DEVELOPER', 'QA'];
 export const roleNames: Record<StaffRole, string> = { PM: 'PM', DEVELOPER: 'Developer', QA: 'QA' };

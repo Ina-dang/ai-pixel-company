@@ -12,7 +12,6 @@ import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
 import { streamSSE } from 'hono/streaming';
-import type postgres from 'postgres';
 import type { z } from 'zod';
 import {
   audit, emit, type EventRow, eventView, mutate, OWNER_ORGANIZATION_ID,
@@ -26,6 +25,7 @@ import { workflowRoutes } from './workflow-routes.js';
 import { loadOfficeApprovals, projectOffice } from './office.js';
 import { ensureDefaultStaffing, staffingRoutes } from './staffing.js';
 import { IntegrationService } from './integrations.js';
+import { createTaskCommand } from './task-commands.js';
 
 export { initializeOwner, transitionTaskForVerification } from './repository.js';
 export type { ApiConfig } from './security.js';
@@ -239,14 +239,7 @@ export function createApp({ database, config, workflowProvider, integrations }: 
     const input = parse(createTaskSchema, await jsonBody(c.req.raw));
     if (input.source !== 'TEXT') throw new ApiError(400, 'INVALID_INPUT', 'Phase 0은 텍스트 업무 입력만 지원합니다.');
     return mutate(database, c, input, async (tx) => {
-      const organizationId = c.get('auth').organizationId;
-      const projects = await tx`select 1 from projects where id=${projectId} and organization_id=${organizationId} and status='ACTIVE'`;
-      if (!projects.length) throw new ApiError(404, 'NOT_FOUND', '프로젝트를 찾을 수 없습니다.');
-      const rows = await tx<TaskRow[]>`insert into tasks (id,organization_id,project_id,title,command_original_ko,command_hash,source,acceptance_criteria,priority,created_by)
-        values (${randomUUID()},${organizationId},${projectId},${input.title},${input.commandOriginalKo},${digest(input.commandOriginalKo)},${input.source},${tx.json(input.acceptanceCriteria as postgres.JSONValue)},${input.priority},${c.get('auth').userId}) returning *`;
-      const task = rows[0];
-      await emit(tx, { organizationId, projectId, taskId: task.id, type: 'task.created', aggregateVersion: 1,
-        payload: { id: task.id, title: task.title, status: task.status, labelKo: '할 일' } });
+      const task = await createTaskCommand(tx, c.get('auth'), projectId, input);
       await audit(tx, c, 'task.created', 'task', task.id, projectId);
       return { status: 201, data: taskView(task) };
     });

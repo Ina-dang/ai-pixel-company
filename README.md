@@ -4,7 +4,7 @@
 
 자연어 업무 지시를 PM·Developer·QA AI의 실제 개발 작업으로 연결하고, 검증된 실행 상태를 픽셀 사무실에 표시하는 AI 회사 운영 플랫폼이다.
 
-**현재 상태: Phase 0 기반·Phase 1 구독 실행 핵심 경로·Phase 2 픽셀 사무실을 검증했다. Phase 3 채용·배정·칸반, GitHub App의 실제 Issue/branch/push/draft PR/현재 head 상태 조회, Slack 비공개 채널 보고와 두 공급자의 실제 서명된 webhook 연결 시험을 검증했다. merge 승인 실행기·Slack 명령 처리가 남아 전체 Phase 3 완료로 판정하지 않는다. 코드 실행 대상은 제한된 Node 함수 fixture이며 임의 저장소 실행은 지원하지 않는다.**
+**현재 상태: Phase 0 기반·Phase 1 구독 실행 핵심 경로·Phase 2 픽셀 사무실과 화면 시범을 검증했다. Phase 3 채용·배정·칸반, GitHub App의 실제 Issue/branch/push/draft PR/현재 head 상태 조회, Slack 보고·실제 명령→업무 등록, 별도 merge 승인·실행기를 구현했다. 실제 merge는 사용자 지시로 미수행이며 일반 CI webhook의 원격 역순/철회와 상시 ingress는 남아 전체 운영 범위 완료로 판정하지 않는다. 코드 실행은 제한된 Node 함수 fixture를 지원한다.**
 
 - B단계: Phase 0 기반 → Phase 1 실제 AI 실행 → Phase 2 픽셀 사무실.
 - C단계: Phase 3 GitHub·Slack·채용 → Phase 4 평가·다중 프로젝트·운영.
@@ -68,7 +68,7 @@ ChatGPT 인증을 강제하고 API 키·공급자 URL·DB 비밀정보 환경변
 
 GitHub App의 저장소 범위와 Slack의 workspace/channel/Owner 매핑은 서버의 무시된 로컬 설정으로 지정한다. [GitHub 설정](docs/10-github-integration.md)·[Slack 설정](docs/11-slack-integration.md)을 따른다. 비밀값은 UI·채팅·Git에 넣지 않는다. `pnpm verify:integrations-live`는 설정된 실제 자격 증명을 읽기 전용으로 확인한다. 자격 증명이 없으면 실패로 종료한다. `gh` 로그인이나 Slack에 설치된 공식 GitHub/Copilot 앱을 전용 App 인증으로 재사용하지 않는다.
 
-원격 작업은 실제 test/build0·동일 후보 QA PASS 뒤에만 요청하며 DB 작업 기록과 현재 connection/run/project version을 검사한다. 후보 manifest SHA256과 원격 Git commit SHA는 구분한다. 불명확한 원격 효과는 UNKNOWN으로 남겨 자동 재전송을 막고, 429는 제한된 횟수와 Retry-After를 따른다. 현재 merge는 범위가 고정된 요청 기록까지이며 승인 소비/실제 merge 실행기는 미구현이다. Slack은 한국어 보고·서명된 매핑 inbox 접수까지이며 명령→업무 생성/interactive 승인은 미구현이다.
+원격 작업은 실제 test/build0·동일 후보 QA PASS 뒤에만 요청하며 DB 작업 기록과 현재 connection/run/project version을 검사한다. 후보 manifest SHA256과 원격 Git commit SHA는 구분한다. 불명확한 원격 효과는 UNKNOWN으로 남겨 자동 재전송을 막고, 기존 외부 operation의 429는 제한된 횟수와 Retry-After를 따른다. merge는 별도 범위 승인과 명시적 실행 요청을 요구하며 Slack 명령은 TODO 등록/상태/도움말만 지원한다. Slack interactive 승인과 자동 업무 실행은 제공하지 않는다.
 
 ## 실제 검증 결과 — 2026-10-19
 
@@ -76,10 +76,10 @@ GitHub App의 저장소 범위와 Slack의 workspace/channel/Owner 매핑은 서
 |---|---|
 | `pnpm lint` | 통과, 오류·경고 없음 |
 | `pnpm typecheck` | 7개 workspace 및 테스트/스크립트 통과 |
-| `pnpm test` | 138개 = 기존97 + 직원12 + 외부 연동 PG15 + adapter11 + 제한 webhook 중계3. HTTP 모의 시험과 아래 실제 App 시험을 구분 |
+| `pnpm test` | 158개 = 사무실 시범141 + 명령/merge 경계17. HTTP 모의 merge 시험과 실제 공급자의 비merge 검증을 구분 |
 | `pnpm verify:contracts` | TypeScript fixture 16개·Python JSON Schema fixture 26개 통과 |
 | `pnpm build` | Next 프로덕션 빌드·API/공유 패키지 타입 빌드 통과 |
-| `pnpm test:e2e` | Chromium 16개 = 기존5 + 사무실7 + 협업4. 직원 채용/불변 프로필/배정, 칸반, 연동 미설정/승인 gate/UNKNOWN 중복 차단과 기존 사무실 회귀 |
+| `pnpm test:e2e` | Chromium20개 = 기존5 + 사무실8 + 협업7. 명시적 승인/실행 분리·원격 차단·Slack 결과 escaping과 기존 회귀 |
 | `pnpm verify:agents` | Phase 1 실제 구독 PM/Developer/QA, 코드·추가 테스트 파일 수정, test/build exit0, QA PASS. 저장된 실행 수동 재개 성공, 아래 최종 결과는 사용자 지시로 수락 |
 | `pnpm verify:office-live` | 실제 Codex→브라우저 PM 작업/Developer 작업/QA 검토 관측, 동일 SHA test/build0·QA PASS, reload/390px·page error0. 새 결과는 수락 대기 |
 | `pnpm verify:staffing-live` | 실제 신규 Developer 채용/배정·Codex 코드 수정·Docker test/build0·동일 SHA QA PASS, 이름/reload/390px/page error0 확인. Owner 수락 대기 |
@@ -115,7 +115,7 @@ GitHub 실제 webhook 시험은 초기 ping의 403을 확인한 뒤 수정했다
 
 ✅ Phase 0은 실제 PostgreSQL·Hono·Next와 브라우저를 연결해 검증했다. 세션 hash 저장/만료/철회, CSRF/Origin, tenant FK/조회, idempotency, version 경합, 원문 보존, 상태 이력, SSE replay/reset/권한 철회가 테스트 대상이다.
 
-⚠️ 현재 Sandbox는 소유한 고정 fixture만 지원한다. 임의 저장소·의존성 설치·외부 네트워크 실행은 지원하지 않는다. GitHub App 외부 쓰기·현재 head의 로컬 검사 상태, Slack 실제 보고와 실제 webhook 연결을 검증했지만 일반 CI webhook의 원격 역순/철회 시험, Slack 명령 처리와 merge 승인 실행기는 남아 있다. 임시 공개 연결은 닫았으며 상시 ingress는 없다. Redis/Python LangGraph는 PostgreSQL 큐/Node worker로 대체했다(ADR-011). 한국어/영어 비교 실험은 미실행이다. 사무실은 프로젝트별 세 역할 투영이며 회의 시뮬레이션·대규모 조직은 후속 범위다.
+⚠️ 현재 Sandbox는 소유한 고정 fixture만 지원한다. 임의 저장소·의존성 설치·외부 네트워크 실행은 지원하지 않는다. 일반 CI webhook의 원격 역순/철회 시험과 실제 merge 성공 검증은 미수행이다. 임시 공개 연결은 닫았으며 상시 ingress는 없다. Redis/Python LangGraph는 PostgreSQL 큐/Node worker로 대체했다(ADR-011). 한국어/영어 비교 실험은 미실행이다. 사무실은 프로젝트별 세 역할 투영이며 회의 시뮬레이션·대규모 조직은 후속 범위다.
 
 ## 사무실 화면 시범 개선 — 2026-10-19
 
@@ -124,6 +124,28 @@ GitHub 실제 webhook 시험은 초기 ping의 403을 확인한 뒤 수정했다
 충돌 맵·직원 목표 좌표·서버 상태 판정은 변경하지 않았다. 모바일에서는 선택 직원의 실제 활동을 DOM 텍스트로 읽을 수 있다. 레이아웃 편집기·회의 시뮬레이션·대규모 직원 표시는 이번 시범에 포함하지 않는다.
 
 검증: `pnpm verify` 성공(테스트141개, lint·typecheck·TS16/Python26 계약 fixture·build), `pnpm test:e2e` Chromium17개 성공. `pnpm verify:office-visual 56c54d8a-de76-4400-8308-a63b1bd2adaa`로 실제 서버 PM WAITING·Developer/QA IDLE을 화면과 대조했다. 390px·키보드 선택·그래픽 토글·새로고침을 확인했고 페이지 오류/업무 변경 요청/외부 요청은 각각0건이었다. 모델 호출 없이 기존 승인 대기 기록만 읽었다. 스크린샷은 Git 제외 `test-results/office-pilot-desktop.png`, `test-results/office-pilot-mobile.png`에 저장된다.
+
+## Phase 3 Slack 명령·merge 승인 실행기 — 2026-10-19
+
+✅ `/ai-pixel 도움말`, `상태`, `업무 <원문>`을 raw 서명·5분 timestamp·고정 team/channel/현재 Owner 매핑으로 검증하고 durable inbox에 접수한다. ACK 후 공통 task command가 TODO만 생성한다. 원문/해시를 보존하며 task/receipt 결과를 한 transaction으로 저장한다. 모델 호출·결과 수락·merge는 자동 시작하지 않는다. 처리 결과와 알림의 SENT/FAILED/UNKNOWN은 별도로 표시하고 response_url/토큰은 저장하지 않는다.
+
+✅ merge는 재검증→범위 승인→별도 실행 요청→서버 큐 순서다. 승인 세션·만료·connection/run version·검증 후보, installation/repo/PR/head/base SHA·squash·정책·CI 검사 식별자·보호/ruleset 해시를 다시 확인한다. Draft/미수락/변경된 권한·SHA·CI·정책은 차단한다. timeout/재시작 중단은 UNKNOWN이며 재PUT하지 않는다. 명시적 원격 조회 조정은 동일 PR head와 squash commit 부모(base)를 확인한다. 실제 merge 성공·timeout은 모의 transport에서 검증했고 실제 저장소에는 승인·실행 요청을 보내지 않았다.
+
+| 실제 검증 | 결과 |
+|---|---|
+| 전체 회귀 | lint·typecheck·TS16/Python26 계약 fixture·테스트158개·build 성공 |
+| 브라우저 | Chromium20개 통과; 실제 GitHub 승인 차단/Slack 기록의 데스크톱·390px·키보드 검증, 페이지 오류0건 |
+| 실제 Slack | 내손비 비공개 #ai-pixel-test에서 TASK/STATUS/HELP 3건 모두 PROCESSED·SENT |
+| 생성 업무 | `e19da44f-1d78-434d-8760-f520b91f25af`, source SLACK·TODO 1건, 원문 SHA256 `533c329f6997ef3e2fc6da89b14f71b0490af664bcb118bb69bf5474dd6d0801`, 해당 업무 run0건 |
+| Slack 근거 | [실제 등록 결과](https://app.slack.com/archives/C0CAEGXQ5LL/p1792412579650249), [상태](https://app.slack.com/archives/C0CAEGXQ5LL/p1792412608343039), [도움말](https://app.slack.com/archives/C0CAEGXQ5LL/p1792412624616329) |
+| 실제 GitHub | 시험 PR #2 head `4e9d9ac099cfe97a2b9d68e6777a0a85253cec5d`, base `df3711dc90545e7f08dfebfad675dd6e745aa767`, 필수 로컬 Docker CI PASS, 보호/ruleset 조회 성공 |
+| 실제 승인 차단 | request `c2d81460-9e76-4f08-a62c-6c69d67a5b34`, scope `2dc646dee068ab6b5953813849cf51ce893067793c5e03e743024e2339a61948`, RESULT_ACCEPTANCE_REQUIRED + DRAFT_PULL_REQUEST, 승인/실행 요청0건, run WAITING_APPROVAL 유지 |
+
+실제 재현: `pnpm verify:slack-command-live <projectId> <existingSlackTaskId>`는 읽기 전용으로 기존 명령/업무/화면을 검사한다. `pnpm verify:approval-live <projectId> <verifiedRunId>`는 로컬 merge 승인 요청을 만들고 원격 읽기·브라우저 재검증만 수행한다. 승인/실행 경로는 스크립트에서 금지했다. Git 제외 `test-results/phase3-slack-live-{desktop,mobile}.png`, `phase3-merge-preview-{desktop,mobile}.png`를 직접 확인했다.
+
+⚠️ 사용자 승인으로 commands scope를 추가하고 최종 Slack 재설치는 사용자가 직접 허용했다. 무료 Cloudflare 터널은 시험 후 종료했고 port3002 listener0을 확인했다. 등록된 Slash Command URL은 종료된 임시 주소이므로 현재 상시 명령 수신은 불가하다. 새 제한 시험 또는 별도 상시 ingress 승인이 필요하다. 검증용 TODO 업무1건은 자동 실행하지 않고 남겼다. 추가 모델 API·유료 자원·운영 배포·실제 merge는 수행하지 않았다.
+
+⚠️ 보호 브랜치 정책 읽기 권한이 없으면 차단한다. Administration read는 자동 확대하지 않으며 별도 승인과 로컬 protectionRead 설정이 필요하다. GitHub REST merge는 head SHA 조건을 지원하지만 최종 조회와 PUT 사이 base 변경 경합을 원자적으로 제거하지 못한다. 세부 계약은 docs10/11·ADR-013을 따른다.
 
 ## 구현 범위 판정
 

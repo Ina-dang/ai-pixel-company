@@ -121,6 +121,15 @@
 - 증거/비용: candidate manifest SHA256과 remote Git SHA를 분리하고 immutable baseline byte를 확인한다. 전용 시험 저장소에서 App Issue/branch/push/draft PR을 검증했다. 독립 로컬 Docker 검사 status를 App이 읽으며 GitHub hosted Actions는 실행하지 않았다. 발행 설정과 webhook 서명 키 유무를 별도 투영한다.
 - 한계: merge는 대상 SHA/CI/정책 scope 요청 기록까지만 제공한다. 승인 소비·실제 merge 집행과 Slack 명령→업무 생성/interactive 승인 및 외부 HTTPS webhook 전달은 미완료다. 전체 Phase 3 완료로 표시하지 않는다. 실제 run/SHA/PR과 검증 수치는 README를 기준으로 한다.
 
+## ADR-013 — Slack 명령 큐와 별도 merge 승인 소비
+
+- 날짜/상태: 2026-10-19 / 구현·전체 회귀158개/Chromium20개 통과. Owner 허용 및 직접 재설치 후 실제 Slack 명령3건·채널 알림과 업무1건/run0건 확인, 터널 종료. 실제 merge는 사용자 지시로 미수행.
+- 대체 관계: ADR-012의 명령 처리·승인 실행기 미구현 범위를 후속 구현한다. 기존 실행 엔진·Phaser·서버 projection은 유지한다.
+- 선택: `/ai-pixel` 도움말/상태/업무를 서명 검증·고정 Owner mapping·durable receipt 이후 처리하고 공통 task command로 TODO만 생성한다. Slack interactive/merge 승인과 자동 모델 실행은 도입하지 않는다. 비밀인 response_url은 저장하지 않는다.
+- merge: 결과 수락과 분리된 REQUESTED→APPROVED→QUEUED→RUNNING 상태를 사용한다. 별도 클릭·scopeHash/version·승인 세션과 만료를 요구하며 원격 head/base/CI 식별자·보호/ruleset 및 로컬 검증 근거를 다시 확인한다. 불명 결과는 UNKNOWN, 원격 조회만으로 조정한다. 재merge/자동 재전송은 없다.
+- 한계: GitHub REST PUT의 서버 측 조건은 head SHA이며 base SHA는 최종 재조회만 가능하다. 보호 정책을 읽을 수 없으면 차단하며 Administration read는 자동 요청하지 않는다. 성공/timeout merge는 모의 transport로만 시험하고 실제 공급자에서는 승인 전 차단을 검증한다.
+- 근거: 10/11 및 08 API·07 DB 보충, migration0005와 README 실제 검증 기록을 따른다. 추가 모델 API/유료 자원은 도입하지 않는다.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

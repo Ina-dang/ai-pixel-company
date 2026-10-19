@@ -2,7 +2,11 @@
 
 ## Phase 3 구현·설정 경계 — 2026-10-19
 
-Slack 전용 bot token, 고정 team/channel·Owner user mapping, raw body 서명/재생 방지·durable inbox와 한국어 결과 보고 adapter를 구현한다. 현재 수신 inbox의 접수 응답은 업무 생성·실행·승인 성공을 뜻하지 않는다. Slack 명령을 실제 업무로 변환하는 처리와 interactive 승인은 후속 범위다. 메시지 전송 실패/결과 불명은 별도 연동 작업에 남기며 workflow 결과를 덮어쓰지 않는다.
+Slack 전용 bot token, 고정 team/channel·Owner user mapping, raw body 서명/재생 방지·durable inbox와 한국어 결과 보고 adapter를 구현했다. `/ai-pixel 도움말|help`, `상태|status`, `업무|task <원문>`은 durable receipt 후 신속하게 HTTP200 ephemeral ACK하고 큐에서 처리한다. 접수 응답은 업무 생성·실행·승인 성공을 뜻하지 않는다. interactive 승인과 Slack에서의 실행·결과 수락·merge 명령은 지원하지 않는다.
+
+업무 명령은 웹과 같은 task command/검증·이벤트 경로를 사용하며 원문 공백/줄바꿈과 SHA256을 보존한다. source=SLACK, TODO로 등록하고 수용 기준은 Owner 확인을 요구하는 manual AC-1로 둔다. 모델 실행은 자동 시작하지 않는다. 고정 연결 version과 현재 Owner·조직·프로젝트 권한을 큐 처리 및 알림 전송 경계에서 재검사한다. task 생성·결과 저장은 한 transaction이며 body hash 기반 중복 접수는 새 task를 만들지 않는다.
+
+`response_url`·Slack 검증 토큰은 저장/호출하지 않는다. 처리 결과는 지정 채널로만 전송하고 웹에서 명령 상태와 알림 상태를 구분한다. 알림의 명확한 실패는 FAILED, timeout/재시작 중단 등 전송 여부 불명은 UNKNOWN이며 자동 재전송하지 않는다. 기존 업무/실행 결과는 변경하지 않는다. Owner가 commands scope와 30분 이내 임시 공개를 승인하고 최종 재설치를 직접 허용했다. 실제 TASK/STATUS/HELP 3건과 한국어 알림3건, TODO 업무1건/run0건을 확인했다. 터널 종료 후 상시 수신은 불가하다. 근거는 README를 따른다. 공식 [Slash Command 문서](https://docs.slack.dev/interactivity/implementing-slash-commands/)는 2026-10-19 열람했고 3초 ACK 요건을 확인했다(개별 변경일 미공개).
 
 사진에서 확인한 Slack용 GitHub 앱은 GitHub/Copilot의 앱이며 AI Pixel Company 전용 앱과 인증이 분리된다. [Slack Apps](https://api.slack.com/apps)에서 전용 앱을 준비하고, 사용자 지정 시험 채널만 연결한다. 로컬 설정은 `.local/integrations.json`의 `connections` 중 `provider: SLACK`, `config: {teamId,channelId,userMappings}`, `secretRefs: {botToken,signingSecret}`다. `userMappings`는 Slack user ID→앱 Owner user UUID다. 비밀 참조는 `env:AI_PIXEL_SLACK_BOT_TOKEN`, `env:AI_PIXEL_SLACK_SIGNING_SECRET` 또는 `.local/integration-secrets/` 내 `file:파일명`이다. 토큰 값을 UI·채팅에 입력하지 않는다.
 

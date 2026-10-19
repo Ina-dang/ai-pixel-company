@@ -8,11 +8,13 @@ import { z } from 'zod';
 import { audit, emit, lockOrganization, mutate } from './repository.js';
 import { ApiError, type ApiEnv } from './security.js';
 import type { WorkflowRow } from './workflows.js';
+import { parseSlackCommand, SlackCommands, type SlackReceipt } from './slack-commands.js';
+import { IntegrationMerges } from './integration-merges.js';
 
-type Connection = { id: string; organization_id: string; project_id: string; provider: Provider; config: unknown; secret_refs: Record<string, string>; enabled: boolean; version: number };
-type Operation = { id: string; connection_id: string; connection_version: number; organization_id: string; project_id: string; provider: Provider; kind: OperationKind; run_id: string; candidate_sha: string;
+export type Connection = { id: string; organization_id: string; project_id: string; provider: Provider; config: unknown; secret_refs: Record<string, string>; enabled: boolean; version: number };
+export type Operation = { id: string; connection_id: string; connection_version: number; organization_id: string; project_id: string; provider: Provider; kind: OperationKind; run_id: string; candidate_sha: string;
   request: { expectedRunVersion: number; title?: string; body?: string }; status: string; attempts: number; version: number; error_code: string | null; external_ref: Record<string, unknown> | null; created_at: Date; updated_at: Date };
-type Receipt = { id: string; connection_id: string; organization_id: string; project_id: string; provider: Provider; payload: { action?: string; headSha?: string }; attempts: number };
+type Receipt = SlackReceipt & { provider: Provider; payload: SlackReceipt['payload'] & { action?: string; headSha?: string }; attempts: number };
 const id = z.uuid();
 const requestSchema = z.strictObject({ kind: z.enum(operationKinds), runId: id, expectedRunVersion: z.number().int().positive(), title: z.string().min(1).max(200).optional(), body: z.string().min(1).max(6000).optional() });
 const setup = { githubEnv: ['AI_PIXEL_GITHUB_PRIVATE_KEY', 'AI_PIXEL_GITHUB_WEBHOOK_SECRET'], slackEnv: ['AI_PIXEL_SLACK_BOT_TOKEN', 'AI_PIXEL_SLACK_SIGNING_SECRET'] };
@@ -45,7 +47,14 @@ export class IntegrationService {
   private secrets: LocalSecretStore;
   private timer: ReturnType<typeof setInterval> | null = null;
   private busy = false;
-  constructor(readonly database: Database, readonly root: string, private readonly fetcher: typeof fetch = fetch) { this.secrets = new LocalSecretStore(root); }
+  private commands: SlackCommands;
+  readonly merges: IntegrationMerges;
+  constructor(readonly database: Database, readonly root: string, private readonly fetcher: typeof fetch = fetch) {
+    this.secrets = new LocalSecretStore(root);
+    this.commands = new SlackCommands(database, { connection: id => this.connection(id), credential: (c, field) => this.credential(c, field), fetcher });
+    this.merges = new IntegrationMerges(database, { connection: id => this.connection(id), evidence: (org, project, run, version) => this.evidence(org, project, run, version),
+      adapter: (connection, operation, guard) => this.adapter(connection, operation, fetcher, guard) });
+  }
 
   /** Owner-prepared local configuration only. No credential values or browser configuration endpoint. */
   async configureFromLocalFile() {
@@ -90,7 +99,7 @@ export class IntegrationService {
     if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.port || url.username || url.password || url.search || url.hash
       || path.toLowerCase() !== `/${config.owner}/${config.repo}`.toLowerCase() || projects[0]?.default_branch !== config.baseBranch) throw new IntegrationError('PROJECT_REPOSITORY_CHANGED', 409);
   }
-  private async adapter(connection: Connection, operation?: Operation, transport = this.fetcher) {
+  private async adapter(connection: Connection, operation?: Operation, transport = this.fetcher, guard?: () => Promise<void>) {
     await this.repositoryScope(connection);
     return new GitHubAdapter(githubConfig(connection.config), await this.credential(connection, 'privateKey'), transport, async () => {
       const current = await this.connection(connection.id);
@@ -100,6 +109,7 @@ export class IntegrationService {
         const run = await this.evidence(operation.organization_id, operation.project_id, operation.run_id, operation.request.expectedRunVersion);
         if (run.checkpoint.workspace?.sha !== operation.candidate_sha) throw new IntegrationError('CANDIDATE_CHANGED', 409);
       }
+      await guard?.();
     });
   }
   async status(organizationId: string, projectId: string) {
@@ -118,7 +128,9 @@ export class IntegrationService {
       summaries.push({ id: connection.id, provider, configured: reason === null, webhookConfigured, enabled: connection.enabled, version: connection.version, publicConfig, reason });
     }
     const operations = await this.database.sql<Operation[]>`select * from integration_operations where organization_id=${organizationId} and project_id=${projectId} order by created_at desc,id desc limit 100`;
-    return { connections: summaries, operations: operations.map(publicOperation), setup };
+    const commands = await this.database.sql`select id,event_type as "eventType",status,error_code as "errorCode",result,reply_status as "replyStatus",created_at as "createdAt" from integration_inbox
+      where organization_id=${organizationId} and project_id=${projectId} and provider='SLACK' order by created_at desc,id desc limit 30`;
+    return { connections: summaries, operations: operations.map(publicOperation), mergeRequests: await this.merges.list(organizationId, projectId), commands, setup };
   }
   private async evidence(organizationId: string, projectId: string, runId: string, version: number) {
     const rows = await this.database.sql<WorkflowRow[]>`select * from workflow_runs where organization_id=${organizationId} and project_id=${projectId} and id=${runId}`;
@@ -150,7 +162,7 @@ export class IntegrationService {
           const active = await tx`select 1 from workflow_runs where organization_id=${auth.organizationId} and id=${body.runId} and version=${body.expectedRunVersion}`;
           if (!active.length) throw new ApiError(409, 'RUN_VERSION_CHANGED', '실행이 변경됐습니다.');
           const duplicate = await tx`select 1 from integration_operations where connection_id=${connection.id} and run_id=${body.runId} and kind=${body.kind} and status in ('PENDING','RUNNING','SUCCEEDED','UNKNOWN','DEFERRED')`;
-          if (duplicate.length && body.kind !== 'CI_REFRESH') throw new ApiError(409, 'OPERATION_EXISTS', '기존 연동 작업을 확인하세요. 결과 불명 작업은 재발행하지 않습니다.');
+          if (duplicate.length && !['CI_REFRESH', 'MERGE_REQUEST'].includes(body.kind)) throw new ApiError(409, 'OPERATION_EXISTS', '기존 연동 작업을 확인하세요. 결과 불명 작업은 재발행하지 않습니다.');
           const created = await tx<Operation[]>`insert into integration_operations(id,connection_id,connection_version,organization_id,project_id,provider,kind,run_id,candidate_sha,request)
             values(${randomUUID()},${connection.id},${connection.version},${auth.organizationId},${projectId},${provider},${body.kind},${body.runId},${run.checkpoint.workspace?.sha ?? ''},${json(tx, body)}) returning *`;
           await this.event(tx, created[0]); await audit(tx, c, 'integration.operation.requested', 'integration_operation', created[0].id, projectId);
@@ -175,6 +187,7 @@ export class IntegrationService {
         });
       } catch (error) { convert(error); }
     });
+    routes.route('/', this.merges.routes());
     return routes;
   }
   private async event(tx: Transaction, operation: Operation) {
@@ -217,21 +230,24 @@ export class IntegrationService {
           if (team !== config.teamId || channel !== config.channelId || typeof user !== 'string' || !config.userMappings[user]) throw new IntegrationError('SLACK_MAPPING_DENIED', 403);
           const member = await this.database.sql`select 1 from memberships where organization_id=${connection.organization_id} and user_id=${config.userMappings[user]} and role='OWNER' and status='ACTIVE'`;
           if (!member.length) throw new IntegrationError('SLACK_MAPPING_DENIED', 403);
+          if (value.command !== '/ai-pixel' || !c.req.header('content-type')?.includes('application/x-www-form-urlencoded')) throw new IntegrationError('SLACK_COMMAND_UNSUPPORTED', 400);
+          const command = parseSlackCommand(value.text);
           delivery = typeof value.event_id === 'string' ? value.event_id : hash(raw); eventType = String(event?.type ?? value.type ?? value.command ?? 'command').slice(0, 50);
-          payload = { teamId: config.teamId, userId: user, channelId: config.channelId, eventType };
+          payload = { teamId: config.teamId, userId: user, actorId: config.userMappings[user], channelId: config.channelId, eventType, command };
         }
         if (!/^[A-Za-z0-9-]{8,100}$/.test(delivery) || !/^[A-Za-z0-9_/-]{1,60}$/.test(eventType)) throw new IntegrationError('DELIVERY_INVALID', 400);
         const result = await this.database.sql.begin(async tx => {
           await lockOrganization(tx, connection.organization_id);
           const existing = await tx<{ body_hash: string }[]>`select body_hash from integration_inbox where connection_id=${connection.id} and delivery_id=${delivery}`;
           if (existing[0]) { if (existing[0].body_hash !== hash(raw)) throw new IntegrationError('DELIVERY_CONFLICT', 409); return { duplicate: true }; }
-          await tx`insert into integration_inbox(id,connection_id,organization_id,project_id,provider,delivery_id,body_hash,event_type,payload)
-            values(${randomUUID()},${connection.id},${connection.organization_id},${connection.project_id},${provider},${delivery},${hash(raw)},${eventType},${json(tx, payload)})`;
+          await tx`insert into integration_inbox(id,connection_id,connection_version,organization_id,project_id,provider,delivery_id,body_hash,event_type,payload)
+            values(${randomUUID()},${connection.id},${connection.version},${connection.organization_id},${connection.project_id},${provider},${delivery},${hash(raw)},${eventType},${json(tx, payload)})`;
           if (provider === 'GITHUB' && eventType === 'installation' && ['deleted', 'suspend'].includes(String(value.action))) await tx`update integration_connections set enabled=false,version=version+1,updated_at=now() where id=${connection.id}`;
           await emit(tx, { organizationId: connection.organization_id, projectId: connection.project_id, type: 'integration.webhook.received', aggregateVersion: connection.version, payload: { provider, eventType, deliveryId: delivery } });
           return { duplicate: false };
         });
-        return c.json({ received: true, ...result, ...(provider === 'SLACK' ? { text: '요청을 접수했어요. 실행·승인 작업은 연결된 웹 대시보드에서 확인해 주세요.' } : {}) }, 202);
+        if (provider === 'SLACK') return c.json({ received: true, ...result, response_type: 'ephemeral', text: '명령을 접수했습니다. 처리 결과는 지정 채널과 웹 연결 기록에 표시됩니다. 실행·merge는 자동으로 시작하지 않습니다.' }, 200);
+        return c.json({ received: true, ...result }, 202);
       } catch (error) { convert(error); }
     });
     return routes;
@@ -240,12 +256,17 @@ export class IntegrationService {
     // A crash after dispatch may have produced a remote effect. Never resend it.
     await this.database.sql`update integration_operations set status='UNKNOWN',error_code='PROCESS_RESTART_EFFECT_UNKNOWN',version=version+1,updated_at=now() where status='RUNNING'`;
     await this.database.sql`update integration_inbox set status='RECEIVED' where status='PROCESSING' and attempts<3`;
+    await this.database.sql`update integration_inbox set status='FAILED',error_code='PROCESS_RESTART_RETRY_LIMIT' where status='PROCESSING' and attempts>=3`;
+    await this.database.sql`update integration_inbox set reply_status='UNKNOWN',error_code='PROCESS_RESTART_EFFECT_UNKNOWN' where reply_status='SENDING'`;
+    await this.merges.recover();
     this.timer = setInterval(() => { void this.processOnce().catch(() => undefined); }, 1000);
   }
   async stop() { if (this.timer) clearInterval(this.timer); while (this.busy) await new Promise(done => setTimeout(done, 20)); }
   async processOnce() {
     if (this.busy) return false; this.busy = true;
     try {
+      if (await this.merges.processOnce()) return true;
+      if (await this.commands.replyOnce()) return true;
       const candidates = await this.database.sql<Operation[]>`select * from integration_operations where status in ('PENDING','DEFERRED') and attempts<3 and next_attempt_at<=now() order by created_at,id limit 1`;
       const candidate = candidates[0];
       if (!candidate) return this.processInboxOnce();
@@ -334,12 +355,7 @@ export class IntegrationService {
         if (ci.status !== 'PASS') throw new IntegrationError('CURRENT_HEAD_CI_REQUIRED', 409);
         const config = githubConfig(connection.config);
         if (!Number.isSafeInteger(pull.number) || Number(pull.number) < 1) throw new IntegrationError('PREREQUISITE_REQUIRED', 409);
-        const scope = { action: 'MERGE_PULL_REQUEST', installationId: config.installationId, repositoryId: config.repositoryId, base: config.baseBranch, branch, headSha: String(pushed.headSha),
-          candidateSha: operation.candidate_sha, runVersion: run.version, pullNumber: Number(pull.number), mergeMethod: 'squash', policyVersion: config.policyVersion, requiredChecks: config.requiredChecks, ci };
-        const scopeHash = hash(JSON.stringify(scope)), requestId = randomUUID();
-        await this.database.sql`insert into integration_merge_requests(id,operation_id,organization_id,project_id,run_id,scope,scope_hash,expires_at)
-          values(${requestId},${operation.id},${operation.organization_id},${operation.project_id},${operation.run_id},${this.database.sql.json(scope)},${scopeHash},now()+interval '15 minutes')`;
-        return { requestId, scopeHash, ...scope, requiresOwnerApproval: true, remoteMergeExecuted: false };
+        return this.merges.create(operation, connection, Number(pull.number), branch, String(pushed.headSha), config);
       }
     }
   }
@@ -348,6 +364,7 @@ export class IntegrationService {
       where id=(select id from integration_inbox where status='RECEIVED' and attempts<3 order by created_at,id for update skip locked limit 1) returning *`;
     const receipt = receipts[0]; if (!receipt) return false;
     try {
+      if (receipt.provider === 'SLACK') { await this.commands.process(receipt); return true; }
       if (receipt.provider === 'GITHUB' && typeof receipt.payload.headSha === 'string' && /^[a-f0-9]{40}$/.test(receipt.payload.headSha)) {
         const connection = await this.connection(receipt.connection_id);
         const pushed = await this.database.sql<Operation[]>`select * from integration_operations where connection_id=${receipt.connection_id} and kind='PUSH_CANDIDATE' and status='SUCCEEDED' and external_ref->>'headSha'=${receipt.payload.headSha} order by created_at desc limit 1`;
@@ -361,7 +378,15 @@ export class IntegrationService {
         }
       }
       await this.database.sql`update integration_inbox set status='PROCESSED',updated_at=now() where id=${receipt.id}`;
-    } catch (error) { await this.database.sql`update integration_inbox set status='FAILED',error_code=${error instanceof IntegrationError ? error.code : 'RECONCILIATION_UNVERIFIABLE'},updated_at=now() where id=${receipt.id}`; }
+    } catch (error) {
+      await this.database.sql.begin(async tx => {
+        await lockOrganization(tx, receipt.organization_id);
+        const errorCode = error instanceof IntegrationError ? error.code : 'RECONCILIATION_UNVERIFIABLE';
+        await tx`update integration_inbox set status='FAILED',error_code=${errorCode},updated_at=now() where id=${receipt.id}`;
+        await emit(tx, { organizationId: receipt.organization_id, projectId: receipt.project_id, type: 'integration.updated', aggregateVersion: receipt.connection_version ?? 1,
+          payload: { receiptId: receipt.id, status: 'FAILED', errorCode } });
+      });
+    }
     return true;
   }
 }

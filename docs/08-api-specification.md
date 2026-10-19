@@ -1,5 +1,14 @@
 # API 계약
 
+## Phase 3 명령·merge API 보충 — 2026-10-19
+
+- `POST /api/webhooks/slack/:connectionId`: Slack raw 서명·timestamp·team/channel/Owner를 검증하고 `/ai-pixel` 명령을 durable receipt로 접수한다. HTTP200 ephemeral ACK 후 비동기 처리하며 접수 성공과 task/알림 성공을 구분한다. `response_url`은 보관하지 않는다.
+- `GET /api/v1/projects/:id/integrations`: 기존 connections/operations에 `mergeRequests`, `commands`를 추가한다. 명령 처리 결과와 `replyStatus`는 별개다. 원문·비밀/응답 URL·서명은 노출하지 않는다.
+- `POST /api/v1/projects/:id/integrations/merges/:requestId/{validate,approve,execute,revoke,reconcile}`: `{expectedVersion,scopeHash}`. Owner session·Origin·CSRF를 요구한다. validate는 원격 읽기만 수행하며 ready/blockers를 반환한다. 나머지는 Idempotency-Key가 필요하다. approve는 승인 기록, execute는 승인한 같은 세션의 별도 실행 큐 요청이다. 실제 PUT 직전 scope·근거·권한을 다시 검사한다.
+- reconcile은 UNKNOWN만 원격 조회해 실제 merged PR과 승인 head/base를 확인한다. 원격 PUT/재시도는 하지 않는다. revoke는 REQUESTED/APPROVED/QUEUED만 허용한다. RUNNING 뒤에는 취소 완료를 주장하지 않는다.
+
+대표 차단: `MERGE_VERSION_CHANGED`, `MERGE_APPROVAL_EXPIRED`, `MERGE_SCOPE_CHANGED`, `MERGE_APPROVER_REVOKED`, `RESULT_ACCEPTANCE_REQUIRED`, `DRAFT_PULL_REQUEST`, `BRANCH_PROTECTION_READ_REQUIRED`. 변경 범위·권한은 새 승인 요청이 필요하며 UNKNOWN을 FAILED/미실행으로 숨기지 않는다.
+
 ## Phase 3 실제 계약 보충 — 2026-10-19
 
 다음 경로는 `/api/v1` 기준이다. Owner 세션·조직/프로젝트 scope를 적용하며 쓰기는 Origin·CSRF·Idempotency-Key를 검사한다.

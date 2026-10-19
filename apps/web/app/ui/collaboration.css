@@ -117,3 +117,10 @@
   .collaboration > .error-notice { margin-left: 18px; margin-right: 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .collaboration-tabs button, .kanban-task { transition: none; } .kanban-task:hover { transform: none; } }
+.merge-scope { display: grid; grid-template-columns: minmax(6rem, auto) minmax(0, 1fr); gap: .45rem .8rem; font-size: .8rem; }
+.merge-scope dd { margin: 0; overflow-wrap: anywhere; }
+.merge-scope dt { color: var(--muted); }
+.merge-approval h5 { font-size: 1rem; margin: 0; }
+.merge-approval :where(p, details) { overflow-wrap: anywhere; }
+.merge-approval > .button, .merge-approval > .text-button { margin: .5rem .5rem .5rem 0; }
+.merge-command-result { white-space: pre-wrap; overflow-wrap: anywhere; }

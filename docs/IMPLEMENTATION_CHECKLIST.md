@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-Phase 0 기반, Phase 1 구독 제한 fixture 경로와 Phase 2 사무실, Phase 3 채용·배정·칸반과 GitHub/Slack adapter를 구현했다. 신규 Codex 직원의 실제 코드 수정·Docker test/build·동일 SHA QA, 실제 App Issue/push/draft PR/현재 head 로컬 검사 상태와 Slack 비공개 채널 보고·원격 URL challenge Verified, GitHub 실제 ping 재전달·중복 제거를 확인했다. 자동 시험138개 = 기존97 + 직원12 + 외부 연동 PG15 + adapter11 + 제한 중계3, Chromium16개와 TS16/Python26 계약 fixture를 검증한다. 세부 run/SHA/한계는 README를 따른다. 언어 비교/범용 저장소·일반 CI webhook 원격 역순/철회·Slack 명령 처리/merge 실행기는 미완료다. 운영 배포·merge·유료 API 모델 호출은 수행하지 않았다.
+Phase 0 기반·Phase 1 구독 제한 fixture·Phase 2 사무실과 수락된 화면 시범, Phase 3 채용·칸반·GitHub/Slack adapter·Slack 명령·별도 merge 승인 실행기를 구현했다. 자동 시험158개 = 시범141 + 명령/merge 경계17, Chromium20개·TS16/Python26 계약 fixture가 통과했다. 실제 Slack TASK/STATUS/HELP 3건·SENT 알림3건·TODO1건/run0건, 실제 GitHub PR head/base·CI/정책과 Draft/미수락 차단을 확인했다. 실제 merge 성공은 사용자 지시로 미수행이며 모의 transport의 성공/UNKNOWN/조정 경로와 구분한다. 세부 근거는 README를 따른다. 상시 ingress·일반 CI webhook 원격 역순/철회·언어 비교/범용 저장소는 남았다. 운영 배포·실제 merge·추가 유료 모델 API 호출은 수행하지 않았다.
 
 ## Phase 0 — Foundation
 
@@ -49,9 +49,9 @@ Phase 0 기반, Phase 1 구독 제한 fixture 경로와 Phase 2 사무실, Phase
 
 - [ ] P3-01 App JWT/제한 token·서명 inbox·역순 reconcile 자동 시험 통과. 실제 App 한 저장소 설치·인증 및 ping HTTP202/중복 제거·PROCESSED 1건 확인. 일반 CI webhook의 원격 역순/철회는 미검증.
 - [x] P3-02 후보 manifest/원격 commit SHA 분리·불변 fixture byte 검사·version/권한·UNKNOWN/429 gate 및 실제 App Issue/branch/push/draft PR 검증. 원격 전체 파일 일치·동일 SHA Docker 재검증, 현재 head 로컬 검사 status PASS를 App이 조회. hosted Actions 미실행.
-- [ ] P3-03 head/CI/정책 scope가 고정된 merge 요청 구현. 승인 소비·실제 merge 실행기는 미구현이며 merge를 수행하지 않는다.
-- [ ] P3-04 고정 team/channel/Owner·서명/replay/dedupe·한국어 보고·장애 격리 구현. 실제 내손비 전용 봇 인증·비공개 #ai-pixel-test 한국어 보고·별도 조회 및 Slack 원격 URL challenge Verified 확인. 명령→업무 생성/interactive 승인은 미구현.
-- [x] P3-05 한국어 서버 상태 칸반·키보드/390px·업무 상세 연결·승인 gate 우회 상태 변경 없음(T16). Chromium 회귀16개 통과.
+- [x] P3-03 head/base/CI 검사 식별자/정책 scope 요청·별도 Owner 승인·같은 세션의 실행 요청·서버 재검사·철회/만료/UNKNOWN/읽기 전용 조정 구현. 모의 merge 성공/실패와 실제 PR 승인 전 차단을 검증했다. 실제 merge는 별도 Owner 승인 전 수행하지 않는다.
+- [x] P3-04 고정 team/channel/Owner·서명/replay/dedupe·한국어 보고·장애 격리와 Slack 명령→공통 task command 구현. 사용자 직접 재설치 후 실제 비공개 #ai-pixel-test의 TASK/STATUS/HELP 모두 처리/전송 확인. interactive 승인·Slack 실행/merge 명령은 도입하지 않는다. 터널 종료 후 상시 수신 불가.
+- [x] P3-05 한국어 서버 상태 칸반·키보드/390px·업무 상세 연결·승인 gate 우회 상태 변경 없음(T16). Chromium 회귀20개 및 실제 Slack task/GitHub 승인 차단 화면 확인.
 - [x] P3-06 세 템플릿·Codex 구독 기본 모델만·성향/도구/turn-token-time 상한·부서/프로젝트·고용/불변 프로필 이력 구현·실제 PG 시험 통과(T16).
 - [x] P3-07 신규 Developer 채용·배정 후 실제 Codex 코드 수정/test/build0/QA PASS·브라우저 이름·reload/390px 검증. 프로필 snapshot·권한 철회·교체 직원 집계 시험 통과(T16). run/SHA는 README 참조.
 

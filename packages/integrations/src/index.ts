@@ -9,6 +9,11 @@ export class IntegrationError extends Error {
   constructor(readonly code: string, readonly status = 400, readonly retryAfter: number | null = null) { super(code); }
 }
 export function hash(value: string) { return createHash('sha256').update(value).digest('hex'); }
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => `${JSON.stringify(key)}:${stable(child)}`).join(',')}}`;
+  return JSON.stringify(value) ?? 'null';
+}
 function equal(a: string, b: string) {
   const left = Buffer.from(a), right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
@@ -49,11 +54,11 @@ export class LocalSecretStore {
   }
 }
 
-export type GitHubConfig = { appId: string; installationId: number; repositoryId: number; owner: string; repo: string; baseBranch: string; requiredChecks: string[]; policyVersion: string };
+export type GitHubConfig = { appId: string; installationId: number; repositoryId: number; owner: string; repo: string; baseBranch: string; requiredChecks: string[]; policyVersion: string; protectionRead?: boolean };
 export type SlackConfig = { teamId: string; channelId: string; userMappings: Record<string, string> };
 export function githubConfig(value: unknown): GitHubConfig {
   const c = value as GitHubConfig;
-  if (!c || !Object.keys(c).every(key => ['appId','installationId','repositoryId','owner','repo','baseBranch','requiredChecks','policyVersion'].includes(key)) || !/^\d+$/.test(c.appId) || !Number.isSafeInteger(c.installationId) || c.installationId < 1 || !Number.isSafeInteger(c.repositoryId) || c.repositoryId < 1
+  if (!c || !Object.keys(c).every(key => ['appId','installationId','repositoryId','owner','repo','baseBranch','requiredChecks','policyVersion','protectionRead'].includes(key)) || (c.protectionRead !== undefined && typeof c.protectionRead !== 'boolean') || !/^\d+$/.test(c.appId) || !Number.isSafeInteger(c.installationId) || c.installationId < 1 || !Number.isSafeInteger(c.repositoryId) || c.repositoryId < 1
     || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(c.owner) || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(c.repo)
     || !validBranch(c.baseBranch) || !Array.isArray(c.requiredChecks) || c.requiredChecks.length > 32 || !c.requiredChecks.every(s => typeof s === 'string' && s.length > 0 && s.length < 100)
     || typeof c.policyVersion !== 'string' || !c.policyVersion) throw new IntegrationError('CONFIGURATION_INVALID', 409);
@@ -118,7 +123,7 @@ export class GitHubAdapter {
     try { signature = sign('RSA-SHA256', Buffer.from(`${header}.${body}`), this.privateKey).toString('base64url'); } catch { throw new IntegrationError('CREDENTIAL_INVALID', 409); }
     await this.beforeRequest();
     const result = await jsonRequest(this.fetcher, `https://api.github.com/app/installations/${this.config.installationId}/access_tokens`, `${header}.${body}.${signature}`, 'POST', {
-      repository_ids: [this.config.repositoryId], permissions: { metadata: 'read', contents: 'write', issues: 'write', pull_requests: 'write', checks: 'read', actions: 'read', statuses: 'read' },
+      repository_ids: [this.config.repositoryId], permissions: { metadata: 'read', contents: 'write', issues: 'write', pull_requests: 'write', checks: 'read', actions: 'read', statuses: 'read', ...(this.config.protectionRead ? { administration: 'read' } : {}) },
     });
     if (typeof result.token !== 'string' || !result.token) throw new IntegrationError('CREDENTIAL_INVALID', 409);
     await this.beforeRequest();
@@ -184,10 +189,64 @@ export class GitHubAdapter {
     const required = this.config.requiredChecks.map(name => {
       const check = runs.filter(item => item.name === name && item.head_sha === expectedHead).sort((a, b) => Number(b.id) - Number(a.id))[0];
       const status = contexts.filter(item => item.context === name).sort((a, b) => Number(b.id) - Number(a.id))[0];
-      return { name, state: check ? check.status === 'completed' && check.conclusion === 'success' ? 'PASS' : check.status === 'completed' ? 'FAIL' : 'PENDING' : status ? status.state === 'success' ? 'PASS' : status.state === 'pending' ? 'PENDING' : 'FAIL' : 'MISSING' };
+      const evidenceId = check?.id ?? status?.id;
+      return { name, source: check ? 'CHECK_RUN' : status ? 'COMMIT_STATUS' : 'NONE', evidenceId: Number.isSafeInteger(evidenceId) ? Number(evidenceId) : null,
+        state: check ? check.status === 'completed' && check.conclusion === 'success' ? 'PASS' : check.status === 'completed' ? 'FAIL' : 'PENDING' : status ? status.state === 'success' ? 'PASS' : status.state === 'pending' ? 'PENDING' : 'FAIL' : 'MISSING' };
     });
     if (await this.head(branch) !== expectedHead) throw new IntegrationError('REMOTE_HEAD_CHANGED', 409);
     return { headSha: expectedHead, required, status: required.length > 0 && required.every(item => item.state === 'PASS') ? 'PASS' : 'NOT_PASSED' };
+  }
+  async mergeSnapshot(pullNumber: number, branch: string, expectedHead: string) {
+    if (!Number.isSafeInteger(pullNumber) || pullNumber < 1) throw new IntegrationError('PULL_REQUEST_INVALID', 409);
+    const pull = await this.call(`/pulls/${pullNumber}`);
+    const head = pull.head as { sha?: string; ref?: string; repo?: { id?: number } } | undefined;
+    const base = pull.base as { sha?: string; ref?: string; repo?: { id?: number } } | undefined;
+    if (pull.number !== pullNumber || pull.state !== 'open' || pull.merged !== false || typeof pull.draft !== 'boolean' || head?.ref !== branch || head.repo?.id !== this.config.repositoryId
+      || base?.ref !== this.config.baseBranch || base.repo?.id !== this.config.repositoryId || head.sha !== expectedHead) throw new IntegrationError('PULL_REQUEST_SCOPE_CHANGED', 409);
+    const target = await this.call(`/branches/${encodeURIComponent(this.config.baseBranch)}`);
+    const baseSha = sha((target.commit as { sha?: string })?.sha);
+    if (base.sha !== baseSha || typeof target.protected !== 'boolean') throw new IntegrationError('BASE_BRANCH_UNVERIFIABLE', 409);
+    // Rulesets may apply independently of classic branch protection. Never infer "no policy" from a 404/403.
+    const rules = await this.call(`/rules/branches/${encodeURIComponent(this.config.baseBranch)}`);
+    if (!Array.isArray(rules)) throw new IntegrationError('BRANCH_PROTECTION_UNVERIFIABLE', 409);
+    let protection: unknown = null;
+    if (target.protected) {
+      if (!this.config.protectionRead) throw new IntegrationError('BRANCH_PROTECTION_READ_REQUIRED', 409);
+      protection = await this.call(`/branches/${encodeURIComponent(this.config.baseBranch)}/protection`);
+    }
+    const ci = await this.ci(branch, expectedHead);
+    const finalTarget = await this.call(`/branches/${encodeURIComponent(this.config.baseBranch)}`);
+    if (sha((finalTarget.commit as { sha?: string })?.sha) !== baseSha || finalTarget.protected !== target.protected) throw new IntegrationError('BASE_BRANCH_CHANGED', 409);
+    return { pullNumber, branch, headSha: expectedHead, base: this.config.baseBranch, baseSha, draft: pull.draft === true,
+      mergeable: pull.mergeable === true, mergeableState: typeof pull.mergeable_state === 'string' ? pull.mergeable_state : 'unknown',
+      protected: target.protected, protectionHash: hash(stable({ protection, rules })), ci };
+  }
+  async merge(pullNumber: number, branch: string, expected: Awaited<ReturnType<GitHubAdapter['mergeSnapshot']>>) {
+    const current = await this.mergeSnapshot(pullNumber, branch, expected.headSha);
+    if (stable(current) !== stable(expected)) throw new IntegrationError('MERGE_SCOPE_CHANGED', 409);
+    if (current.draft || !current.mergeable || current.mergeableState !== 'clean' || current.ci.status !== 'PASS') throw new IntegrationError('MERGE_NOT_READY', 409);
+    const result = await this.call(`/pulls/${pullNumber}/merge`, 'PUT', { sha: expected.headSha, merge_method: 'squash' });
+    try {
+      if (result.merged !== true) throw new IntegrationError('EFFECT_UNKNOWN', 503);
+      const mergeSha = sha(result.sha);
+      const confirmed = await this.call(`/pulls/${pullNumber}`);
+      if (confirmed.merged !== true || confirmed.merge_commit_sha !== mergeSha) throw new IntegrationError('EFFECT_UNKNOWN', 503);
+      return { merged: true, mergeSha, pullNumber, headSha: expected.headSha, baseSha: expected.baseSha,
+        url: `https://github.com/${this.config.owner}/${this.config.repo}/pull/${pullNumber}` };
+    } catch { throw new IntegrationError('EFFECT_UNKNOWN', 503); }
+  }
+  async mergedResult(pullNumber: number, branch: string, headSha: string, baseSha: string) {
+    const pull = await this.call(`/pulls/${pullNumber}`);
+    const head = pull.head as { sha?: string; ref?: string; repo?: { id?: number } } | undefined;
+    const base = pull.base as { ref?: string; repo?: { id?: number } } | undefined;
+    if (pull.number !== pullNumber || head?.sha !== headSha || head.ref !== branch || head.repo?.id !== this.config.repositoryId
+      || base?.ref !== this.config.baseBranch || base.repo?.id !== this.config.repositoryId) throw new IntegrationError('PULL_REQUEST_SCOPE_CHANGED', 409);
+    if (pull.merged !== true) return null;
+    const mergeSha = sha(pull.merge_commit_sha), commit = await this.call(`/git/commits/${mergeSha}`);
+    const parents = commit.parents as Array<{ sha?: string }> | undefined;
+    if (!Array.isArray(parents) || parents.length !== 1 || parents[0].sha !== baseSha) throw new IntegrationError('MERGED_BASE_UNVERIFIABLE', 409);
+    return { merged: true, mergeSha, pullNumber, headSha, baseSha, observedRemote: true,
+      url: `https://github.com/${this.config.owner}/${this.config.repo}/pull/${pullNumber}` };
   }
   async reconcile(kind: OperationKind, id: string, branch: string, expectedHead?: string) {
     if (kind === 'ISSUE_CREATE' || kind === 'DRAFT_PR_CREATE') {
