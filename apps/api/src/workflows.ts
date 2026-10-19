@@ -4,6 +4,8 @@ import type { Database, Transaction } from '@ai-pixel/db';
 import type postgres from 'postgres';
 import { z } from 'zod';
 import { emit, lockOrganization } from './repository.js';
+import { authorizeStaffingRole, readRunStaffing } from './staffing.js';
+import type { Role, StaffingProfile, StaffingTool } from '@ai-pixel/agents';
 
 const usageSchema = z.object({ inputTokens: z.number().int().nonnegative(), cachedInputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative() });
 const fileSchema = z.object({ path: z.string().max(256), content: z.string().max(100_000) });
@@ -32,9 +34,9 @@ export function workflowView(row: WorkflowRow): WorkflowRun {
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
 }
 // Lease credentials remain private to the worker, even to authenticated dashboard clients.
-export function publicWorkflow(row: WorkflowRow) {
+export function publicWorkflow(row: WorkflowRow, staffing?: StaffingProfile[]) {
   const { leaseToken: _leaseToken, ...run } = workflowView(row);
-  return { ...run, stopping: row.stop_lease_token !== null,
+  return { ...run, ...(staffing ? { staffing } : {}), stopping: row.stop_lease_token !== null,
     resumable: ['PAUSED', 'BLOCKED'].includes(row.status) && !row.checkpoint.activeThreadId && !row.checkpoint.activeTurnId
       && !row.stop_lease_token && !['RECOVERY_REQUIRED', 'STOP_UNVERIFIABLE'].includes(row.checkpoint.stopReason ?? '') };
 }
@@ -68,9 +70,12 @@ export async function updateTaskForRun(tx: Transaction, row: WorkflowRow) {
 
 export class WorkflowRepository implements WorkflowStore {
   constructor(readonly database: Database) {}
+  async authorizeRole(runId: string, role: Role, requiredTools: StaffingTool[]) {
+    return authorizeStaffingRole(this.database, runId, role, requiredTools);
+  }
   async get(id: string) {
     const rows = await this.database.sql<WorkflowRow[]>`select * from workflow_runs where id=${id}`;
-    return rows[0] ? workflowView(rows[0]) : null;
+    return rows[0] ? { ...workflowView(rows[0]), staffing: await readRunStaffing(this.database.sql, id) } : null;
   }
   async claim() {
     // One local subscription backs all projects. An unconfirmed stop survives
@@ -90,7 +95,7 @@ export class WorkflowRepository implements WorkflowStore {
           where id=${rows[0].id} returning *`;
         await updateTaskForRun(tx, claimed[0]);
         await recordWorkflow(tx, claimed[0]);
-        return workflowView(claimed[0]);
+        return { ...workflowView(claimed[0]), staffing: await readRunStaffing(tx, claimed[0].id) };
       });
       if (result) return result;
     }

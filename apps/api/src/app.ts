@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import type { AgentProvider } from '@ai-pixel/agents';
 import {
   createProjectSchema, createTaskSchema, idSchema, loginSchema,
@@ -23,6 +24,8 @@ import {
 } from './security.js';
 import { workflowRoutes } from './workflow-routes.js';
 import { loadOfficeApprovals, projectOffice } from './office.js';
+import { ensureDefaultStaffing, staffingRoutes } from './staffing.js';
+import { IntegrationService } from './integrations.js';
 
 export { initializeOwner, transitionTaskForVerification } from './repository.js';
 export type { ApiConfig } from './security.js';
@@ -75,8 +78,9 @@ function nextPage(row: { id: string; cursor_time: string } | undefined) {
   return row ? Buffer.from(JSON.stringify({ id: row.id, createdAt: row.cursor_time })).toString('base64url') : null;
 }
 
-export function createApp({ database, config, workflowProvider }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider }) {
+export function createApp({ database, config, workflowProvider, integrations }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService }) {
   const app = new Hono<ApiEnv>();
+  const integrationService = integrations ?? new IntegrationService(database, fileURLToPath(new URL('../../../', import.meta.url)));
   const loginAttempts: number[] = [];
   const cookieOptions = {
     path: '/', httpOnly: true, secure: config.cookieSecure,
@@ -105,7 +109,7 @@ export function createApp({ database, config, workflowProvider }: { database: Da
   app.notFound((c) => c.json({ error: { code: 'NOT_FOUND', messageKo: '경로를 찾을 수 없습니다.', retryable: false }, requestId: c.get('requestId') }, 404));
   app.get('/health', async (c) => {
     await database.sql`select 1`;
-    return c.json({ status: 'ok', phase: 2,
+    return c.json({ status: 'ok', phase: 3,
       agentWorkerConfigured: Boolean(workflowProvider), subscriptionReadiness: '/api/v1/subscription' });
   });
 
@@ -143,6 +147,7 @@ export function createApp({ database, config, workflowProvider }: { database: Da
     }, requestId: c.get('requestId') });
   });
 
+  app.route('/api/webhooks', integrationService.webhooks());
   app.use('/api/v1/*', async (c, next) => {
     const auth = await authenticate(database, getCookie(c, 'pixel_session'));
     if (!auth) throw new ApiError(401, 'AUTH_REQUIRED', '로그인이 필요합니다.');
@@ -161,6 +166,8 @@ export function createApp({ database, config, workflowProvider }: { database: Da
     }, requestId: c.get('requestId') });
   });
   app.route('/api/v1', workflowRoutes(database, workflowProvider));
+  app.route('/api/v1', staffingRoutes(database));
+  app.route('/api/v1', integrationService.routes());
   app.delete('/api/v1/auth/session', async (c) => {
     const auth = c.get('auth');
     await database.sql.begin(async (tx) => {
@@ -187,6 +194,7 @@ export function createApp({ database, config, workflowProvider }: { database: Da
       const rows = await tx<ProjectRow[]>`insert into projects (id,organization_id,name,repository_url,default_branch)
         values (${randomUUID()},${c.get('auth').organizationId},${input.name},${input.repositoryUrl},${input.defaultBranch}) returning *`;
       const project = rows[0];
+      await ensureDefaultStaffing(tx, project.organization_id, project.id);
       await emit(tx, { organizationId: project.organization_id, projectId: project.id,
         type: 'project.created', aggregateVersion: 1, payload: { id: project.id, name: project.name } });
       await audit(tx, c, 'project.created', 'project', project.id, project.id);

@@ -1,5 +1,17 @@
 # GitHub 연동
 
+## Phase 3 구현·설정 경계 — 2026-10-19
+
+GitHub App 전용 JWT/installation token, 지정 repository ID·소유자·이름·브랜치 범위, webhook 서명과 durable inbox, Issue/검증 후보 branch/push/draft PR/CI 조회 adapter를 구현한다. `gh` 로그인이나 PAT를 서비스의 App 인증 대체 수단으로 사용하지 않는다. 설정이 없으면 미설정으로 표시하고 원격 쓰기를 거부한다. merge 요청은 대상 head/정책/CI scope를 보존하되 현재 자동 merge 또는 승인 실행기는 제공하지 않는다.
+
+로컬 설정은 Git에서 제외된 `.local/integrations.json`의 `connections` 배열이다. 각 연결은 `organizationId`, `projectId`, `provider: GITHUB`, `config: {appId,installationId,repositoryId,owner,repo,baseBranch,requiredChecks,policyVersion}`, `secretRefs: {privateKey,webhookSecret}`를 사용한다. 비밀 참조는 `env:AI_PIXEL_GITHUB_PRIVATE_KEY`, `env:AI_PIXEL_GITHUB_WEBHOOK_SECRET` 또는 `.local/integration-secrets/` 아래 파일의 `file:파일명` 형식이다. 실제 키를 코드·화면·채팅에 붙이지 않는다.
+
+App 등록 경로는 [GitHub Apps](https://github.com/settings/apps/new)다. 선택한 시험 저장소만 설치 대상으로 지정한다. 필요 권한은 Metadata read, Contents/Issues/Pull requests write, Checks/Actions/Commit statuses read다. workflow 쓰기·Actions 실행·운영 배포 권한은 요청하지 않는다. 실제 설치/키 준비 후 `pnpm verify:integrations-live`는 메시지·Issue·PR·push 없이 인증과 저장소 head를 조회한다. `pnpm verify:github-live <projectId> <runId>`는 고정 시험 저장소의 실제 외부 쓰기 opt-in 시험이며 성공한 Issue/PR을 재생성하지 않고 CI 조회만 새로 기록한다. 서명 webhook 주소는 `/api/webhooks/github/:connectionId`이며 GitHub가 접근할 수 있는 HTTPS 주소가 있어야 실제 전달을 시험할 수 있다. localhost에 코드가 있다는 것만으로 외부 수신 성공을 주장하지 않는다.
+
+2026-10-19 실제 시험: App `AI Pixel Company Ina-dang`은 비공개 `Ina-dang/ai-pixel-company-integration-tests` 한 곳에 설치됐다. App 작성 Issue #1·draft PR #2·검증 후보 push 및 현재 head의 로컬 Docker 검사 status PASS 조회를 확인했다. 원격 파일 전체와 후보 manifest가 일치했다. GitHub Actions workflow는 생성/실행하지 않았다. 별도 승인한 최대30분 임시 중계에서 실제 ping을 재전달해 HTTP202와 durable PROCESSED·중복1건을 확인했다. 실제 App ping은 installation/repository 없이 hook.app_id를 보내므로 이 event만 서명 후 App ID를 검사한다. 일반 event의 설치/저장소 검사는 유지한다. 일반 CI event의 원격 역순/철회는 별도 미검증이다. 종료 후 Active를 끄고 터널을 닫았다. API의 `configured`는 발행 자격 증명, `webhookConfigured`는 서명 키 유무이며 실제 원격 전달 성공을 뜻하지 않는다.
+
+실제 App 설치·저장소·원격 결과 검증 여부는 README의 최신 검증 결과가 기준이다. 아래 항목은 전체 계획을 보존하며 모의 HTTP 시험을 실제 App 시험으로 대신 기록하지 않는다.
+
 ## 1. 목적
 
 실제 branch·Issue·PR·CI를 업무 및 증거에 연결하되 merge는 Owner의 별도 승인으로만 실행한다.

@@ -72,7 +72,7 @@ export function PixelOffice({ projectId, agents: input, connection, syncedAt, on
 
   return <section className="pixel-office panel" aria-label="픽셀 사무실" data-office-state={state}>
     <div className="office-heading">
-      <div><span className="eyebrow">OUR LITTLE WORKPLACE</span><h2>픽셀 사무실 <span className="office-headcount">직원 3명</span></h2><p>계획하고, 만들고, 검토하는 지금의 모습.</p></div>
+      <div><span className="eyebrow">OUR LITTLE WORKPLACE</span><h2>픽셀 사무실 <span className="office-headcount">직원 {agents.filter(agent => agent.assignmentStatus === undefined || agent.assignmentStatus === 'ACTIVE').length}명</span></h2><p>계획하고, 만들고, 검토하는 지금의 모습.</p></div>
       <button type="button" className="button secondary office-graphics-toggle" onClick={() => setGraphics(value => !value)}>{graphics ? '그래픽 끄기' : '그래픽 켜기'}</button>
     </div>
     <div className={`office-sync ${live ? 'is-live' : 'is-stale'}`} role="status">
@@ -88,11 +88,11 @@ export function PixelOffice({ projectId, agents: input, connection, syncedAt, on
       const agent = agents.find(item => item.id === role);
       return <button type="button" key={role} className={`office-person ${selectedId === role ? 'is-selected' : ''}`} aria-label={`${roleNames[role]} 직원 상세`} aria-pressed={selectedId === role} data-office-agent={role} data-agent-state={agent?.state ?? 'UNKNOWN'} data-run-stage={agent?.stage ?? ''} data-run-id={agent?.runId ?? ''} onClick={() => setSelectedId(role)}>
         <span className={`office-portrait role-${role.toLowerCase()}`} aria-hidden="true"><i /><b />{role === 'PM' ? 'P' : role === 'DEVELOPER' ? 'D' : 'Q'}</span>
-        <span className="office-person-content"><strong>{roleNames[role]} <small>{role === 'PM' ? '기획' : role === 'DEVELOPER' ? '개발' : '품질 검토'}</small></strong><span className={`office-state state-${agent?.state.toLowerCase() ?? 'unknown'}`}><i aria-hidden="true" />{agent ? stateNames[agent.state] : '상태 확인 필요'}</span><span className="office-activity">{agent?.activityKo ?? '서버의 직원 상태를 기다리고 있어요'}</span></span>
+        <span className="office-person-content"><strong>{agent?.nameKo ?? roleNames[role]} <small>{roleNames[role]} · {role === 'PM' ? '기획' : role === 'DEVELOPER' ? '개발' : '품질 검토'}</small></strong><span className={`office-state state-${agent?.state.toLowerCase() ?? 'unknown'}`}><i aria-hidden="true" />{agent ? stateNames[agent.state] : '상태 확인 필요'}</span><span className="office-activity">{agent?.activityKo ?? '서버의 직원 상태를 기다리고 있어요'}</span></span>
       </button>;
     })}</fieldset>
     <section className="office-detail" aria-labelledby="office-detail-title" aria-live="polite">
-      <div className="office-detail-intro"><span className="eyebrow">EMPLOYEE DESK</span><h3 id="office-detail-title">{roleNames[selectedId]} 직원 상세</h3><p>{selected ? `${locationNames[selected.location]} · ${selected.activityKo}` : '확인된 직원 상태가 아직 없습니다.'}</p>{selected && selected.activeAssignments > 1 && <small>관련 실행 {selected.activeAssignments}개 · 현재 업무 우선 표시</small>}</div>
+      <div className="office-detail-intro"><span className="eyebrow">EMPLOYEE DESK</span><h3 id="office-detail-title">{roleNames[selectedId]} 직원 상세</h3><p>{selected ? `${selected.nameKo} · ${locationNames[selected.location]} · ${selected.activityKo}` : '확인된 직원 상태가 아직 없습니다.'}</p>{selected && selected.activeAssignments > 1 && <small>관련 실행 {selected.activeAssignments}개 · 현재 업무 우선 표시</small>}</div>
       <div className="office-detail-body"><dl className="office-facts">
         <div><dt>직원 상태</dt><dd>{selected ? stateNames[selected.state] : '확인 필요'}</dd></div>
         <div><dt>업무 상태</dt><dd>{selected?.taskStatus ? taskNames[selected.taskStatus] ?? selected.taskStatus : '배정된 업무 없음'}</dd></div>

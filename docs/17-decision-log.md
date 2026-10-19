@@ -113,6 +113,14 @@
 - 한계: 단일 로컬 계정·소유한 node-functions-v1 fixture만 허용한다. 임의 저장소/의존성 설치/네트워크/외부 배포·merge는 미지원이다. 구독 한도는 외부 Codex 사용과 공유되며 공급자 수치 반영 지연이 있다. 완료된 turn의 토큰만 합산하며 응답 없는 중단 호출의 사용량은 미확정이다. 언어 비교 미실행. 기존 범용 Phase 1 전부 완료를 의미하지 않는다.
 - 근거: [공식 인증](https://learn.chatgpt.com/docs/auth), [app-server](https://learn.chatgpt.com/docs/app-server), [구독 한도](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan). 열람 2026-10-19, 개별 변경일 미공개. 로컬 CLI0.162.1 실제 호출 및 Docker/DB/브라우저 결과는 README/체크리스트.
 
+## ADR-012 — Phase 3 고정 직원 프로필과 범위 제한 외부 연동
+
+- 날짜/상태: 2026-10-19 / 채용·칸반·GitHub 실제 외부 쓰기·Slack 비공개 채널 한국어 보고 검증, 수신 webhook/명령 처리/승인 실행기 일부 미완료.
+- 배경/선택: 기존 Codex 구독 worker/DB/검증 gate를 유지하며 별도 유료 모델·호스팅 없이 채용 프로필과 외부 adapter를 추가한다. 불변 employee profile·run snapshot과 단조 배정 version으로 직원 교체 및 ABA 경합을 구분한다. 현재 배정/고용/도구/lease를 모델·파일 적용·검증 경계에서 다시 검사한다.
+- 외부 범위: GitHub App installation/repository ID·이름·base branch, Slack team/channel/Owner mapping을 서버 로컬 설정으로 고정한다. gh/PAT를 서비스 App 인증으로 대체하지 않는다. 각 원격 호출 직전에 connection/project/run version과 동일 SHA 근거를 재검사한다. effect 불명은 UNKNOWN으로 보존해 재발행을 막는다.
+- 증거/비용: candidate manifest SHA256과 remote Git SHA를 분리하고 immutable baseline byte를 확인한다. 전용 시험 저장소에서 App Issue/branch/push/draft PR을 검증했다. 독립 로컬 Docker 검사 status를 App이 읽으며 GitHub hosted Actions는 실행하지 않았다. 발행 설정과 webhook 서명 키 유무를 별도 투영한다.
+- 한계: merge는 대상 SHA/CI/정책 scope 요청 기록까지만 제공한다. 승인 소비·실제 merge 집행과 Slack 명령→업무 생성/interactive 승인 및 외부 HTTPS webhook 전달은 미완료다. 전체 Phase 3 완료로 표시하지 않는다. 실제 run/SHA/PR과 검증 수치는 README를 기준으로 한다.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

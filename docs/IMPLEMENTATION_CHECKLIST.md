@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-Phase 0 기반, Phase 1 구독 전용 제한 fixture 경로와 Phase 2 픽셀 사무실을 구현했다. 실제 Codex PM/Developer/QA, 파일 수정·Docker test/build·동일 SHA QA와 서버 상태 기반 사무실 연동을 확인했다. 자동 시험97개·Chromium12개와 TS16/Python26 계약 fixture를 검증한다. 세부 실제 결과·한계·실행 명령은 README를 따른다. 언어 비교/범용 저장소는 미실행이다. 외부 App 설치/메시지·merge·운영 배포·API 키 호출은 수행하지 않았다.
+Phase 0 기반, Phase 1 구독 제한 fixture 경로와 Phase 2 사무실, Phase 3 채용·배정·칸반과 GitHub/Slack adapter를 구현했다. 신규 Codex 직원의 실제 코드 수정·Docker test/build·동일 SHA QA, 실제 App Issue/push/draft PR/현재 head 로컬 검사 상태와 Slack 비공개 채널 보고·원격 URL challenge Verified, GitHub 실제 ping 재전달·중복 제거를 확인했다. 자동 시험138개 = 기존97 + 직원12 + 외부 연동 PG15 + adapter11 + 제한 중계3, Chromium16개와 TS16/Python26 계약 fixture를 검증한다. 세부 run/SHA/한계는 README를 따른다. 언어 비교/범용 저장소·일반 CI webhook 원격 역순/철회·Slack 명령 처리/merge 실행기는 미완료다. 운영 배포·merge·유료 API 모델 호출은 수행하지 않았다.
 
 ## Phase 0 — Foundation
 
@@ -47,13 +47,13 @@ Phase 0 기반, Phase 1 구독 전용 제한 fixture 경로와 Phase 2 픽셀 �
 
 ## Phase 3 — Collaboration & Recruitment
 
-- [ ] P3-01 GitHub App scope/token·webhook signature/inbox·역순 reconcile(T14).
-- [ ] P3-02 Issue/branch/push/PR/CI·SHA/테스트 gate·중복 부작용 조정(T14).
-- [ ] P3-03 merge 별도 승인·head/CI/권한 재검사(T09/T14).
-- [ ] P3-04 Slack team/user/channel·서명/replay/dedupe·보고·장애 격리(T15).
-- [ ] P3-05 한국어 칸반 카드·gate 없는 drag 전이 금지(T16).
-- [ ] P3-06 템플릿 채용·모델/성향/도구/상한·부서/프로젝트(T16).
-- [ ] P3-07 신규 직원 실제 수행·권한 거부·불변 프로필 이력(T16).
+- [ ] P3-01 App JWT/제한 token·서명 inbox·역순 reconcile 자동 시험 통과. 실제 App 한 저장소 설치·인증 및 ping HTTP202/중복 제거·PROCESSED 1건 확인. 일반 CI webhook의 원격 역순/철회는 미검증.
+- [x] P3-02 후보 manifest/원격 commit SHA 분리·불변 fixture byte 검사·version/권한·UNKNOWN/429 gate 및 실제 App Issue/branch/push/draft PR 검증. 원격 전체 파일 일치·동일 SHA Docker 재검증, 현재 head 로컬 검사 status PASS를 App이 조회. hosted Actions 미실행.
+- [ ] P3-03 head/CI/정책 scope가 고정된 merge 요청 구현. 승인 소비·실제 merge 실행기는 미구현이며 merge를 수행하지 않는다.
+- [ ] P3-04 고정 team/channel/Owner·서명/replay/dedupe·한국어 보고·장애 격리 구현. 실제 내손비 전용 봇 인증·비공개 #ai-pixel-test 한국어 보고·별도 조회 및 Slack 원격 URL challenge Verified 확인. 명령→업무 생성/interactive 승인은 미구현.
+- [x] P3-05 한국어 서버 상태 칸반·키보드/390px·업무 상세 연결·승인 gate 우회 상태 변경 없음(T16). Chromium 회귀16개 통과.
+- [x] P3-06 세 템플릿·Codex 구독 기본 모델만·성향/도구/turn-token-time 상한·부서/프로젝트·고용/불변 프로필 이력 구현·실제 PG 시험 통과(T16).
+- [x] P3-07 신규 Developer 채용·배정 후 실제 Codex 코드 수정/test/build0/QA PASS·브라우저 이름·reload/390px 검증. 프로필 snapshot·권한 철회·교체 직원 집계 시험 통과(T16). run/SHA는 README 참조.
 
 ## Phase 4 — Company Operations / C 출시
 

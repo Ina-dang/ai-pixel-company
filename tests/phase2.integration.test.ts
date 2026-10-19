@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { ensureDefaultStaffing } from '../apps/api/src/staffing.js';
 import { type OfficeAgent, type Snapshot, snapshotSchema } from '@ai-pixel/contracts';
 import { createDatabase, migrateDatabase } from '@ai-pixel/db';
 import { hash } from '@node-rs/argon2';
@@ -60,6 +61,7 @@ beforeEach(async () => {
   await initializeOwner(database);
   projectId = randomUUID();
   await database.sql`insert into projects (id,organization_id,name,repository_url) values (${projectId},${ORG},'픽셀 사무실','https://github.com/Ina-dang/ai-pixel-company.git')`;
+  await database.sql.begin(tx => ensureDefaultStaffing(tx, ORG, projectId));
   app = createApp({ database, config: { appOrigin: ORIGIN, bootstrapSecretHash: secretHash, sessionTtlSeconds: 3600, cookieSecure: false, ssePollMs: 10, sseHeartbeatMs: 100,
     sseBatchSize: 1000, sseRetentionDays: 30, loginMaxAttempts: 100, loginWindowMs: 60_000 } });
   const login = await app.request('http://127.0.0.1:3001/api/v1/auth/session', { method: 'POST', headers: { Origin: ORIGIN, 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: SECRET }) });
@@ -192,6 +194,7 @@ describe('Phase 2 server-authoritative office projection', () => {
   test('project and organization scope exclude foreign assignments and require authentication', async () => {
     const foreignProject = randomUUID();
     await database.sql`insert into projects (id,organization_id,name,repository_url) values (${foreignProject},${ORG},'다른 프로젝트','https://github.com/Ina-dang/ai-pixel-company.git')`;
+    await database.sql.begin(tx => ensureDefaultStaffing(tx, ORG, foreignProject));
     await fixture({ stage: 'QA', status: 'WAITING_APPROVAL', project: foreignProject });
     expect((await snapshot()).agents.every((agent) => agent.runId === null)).toBe(true);
     expect((await snapshot()).approvals).toEqual([]);

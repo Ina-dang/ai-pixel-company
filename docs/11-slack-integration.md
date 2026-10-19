@@ -1,5 +1,17 @@
 # Slack 협업과 사용자 보고
 
+## Phase 3 구현·설정 경계 — 2026-10-19
+
+Slack 전용 bot token, 고정 team/channel·Owner user mapping, raw body 서명/재생 방지·durable inbox와 한국어 결과 보고 adapter를 구현한다. 현재 수신 inbox의 접수 응답은 업무 생성·실행·승인 성공을 뜻하지 않는다. Slack 명령을 실제 업무로 변환하는 처리와 interactive 승인은 후속 범위다. 메시지 전송 실패/결과 불명은 별도 연동 작업에 남기며 workflow 결과를 덮어쓰지 않는다.
+
+사진에서 확인한 Slack용 GitHub 앱은 GitHub/Copilot의 앱이며 AI Pixel Company 전용 앱과 인증이 분리된다. [Slack Apps](https://api.slack.com/apps)에서 전용 앱을 준비하고, 사용자 지정 시험 채널만 연결한다. 로컬 설정은 `.local/integrations.json`의 `connections` 중 `provider: SLACK`, `config: {teamId,channelId,userMappings}`, `secretRefs: {botToken,signingSecret}`다. `userMappings`는 Slack user ID→앱 Owner user UUID다. 비밀 참조는 `env:AI_PIXEL_SLACK_BOT_TOKEN`, `env:AI_PIXEL_SLACK_SIGNING_SECRET` 또는 `.local/integration-secrets/` 내 `file:파일명`이다. 토큰 값을 UI·채팅에 입력하지 않는다.
+
+발신 보고에 필요한 기본 OAuth 권한은 `chat:write`다. 수신 commands 사용 시 `commands`를 별도로 설정한다. 수신 주소는 `/api/webhooks/slack/:connectionId`이고 Slack이 접근할 수 있는 HTTPS 주소가 필요하다. 현재 HTTP 서명 adapter는 Socket Mode client를 구현하지 않는다. 설정 후 `pnpm verify:integrations-live`의 read-only 인증 검사와 지정 채널의 실제 보고 시험을 구분한다.
+
+실제 설치·채널 지정·발신·외부 webhook 수신 결과는 README를 따른다. 미설정은 연결 성공이 아니며 모의 전송을 실제 메시지로 기록하지 않는다.
+
+2026-10-19 실제 시험은 `내손비`의 비공개 `#ai-pixel-test` 한 채널로 고정했다. 권한은 bot `chat:write` 한 개이며 event 구독은 없다. 전용 봇의 auth.test identity, 서버 SLACK_REPORT 성공, 별도 connector의 실제 한국어 메시지 조회를 확인했다. 토큰은 Git 제외 `.local/integration-secrets/slack-bot.txt`에서만 읽는다. 별도 Owner 승인으로 Socket Mode를 끄고 임시 HTTPS 주소에서 Slack의 실제 서명된 URL challenge Verified를 확인했다. 종료 후 임시 이벤트 수신과 터널을 껐다. 서명 키 없는 발신은 가능하나 서명 수신은 fail closed한다. `configured`는 발행 설정, `webhookConfigured`는 서명 키 유무이며 원격 수신 성공을 뜻하지 않는다.
+
 ## 1. 목적
 
 내부 영어 협업과 한국어 사용자 보고를 Slack App으로 연결한다. Slack 명령도 웹과 같은 인증 주체·권한·승인 정책을 따른다.

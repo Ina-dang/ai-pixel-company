@@ -1,5 +1,25 @@
 # API 계약
 
+## Phase 3 실제 계약 보충 — 2026-10-19
+
+다음 경로는 `/api/v1` 기준이다. Owner 세션·조직/프로젝트 scope를 적용하며 쓰기는 Origin·CSRF·Idempotency-Key를 검사한다.
+
+| 경로 | 실제 계약 |
+|---|---|
+| GET /employees/templates | PM/DEVELOPER/QA 템플릿, 도구·구독 모델·상한·avatar |
+| GET/POST /employees | 목록 / template·nameKo 및 허용 프로필로 채용 |
+| GET/PATCH /employees/:id | 이력 포함 상세 / expectedVersion을 검사하는 새 불변 프로필 |
+| POST /employees/:id/employment | action suspend/retire/rehire, expectedVersion |
+| GET/PUT /projects/:id/staffing | 배정 목록 / role·employeeId·기존 배정 expectedVersion |
+| DELETE /projects/:id/staffing/:role | expectedVersion을 검사하는 배정 해제 |
+| GET /projects/:id/integrations | connections·operations·비밀 없는 설정 이름. configured(발행 설정), webhookConfigured(서명 키 설정)를 분리 |
+| POST /projects/:id/integrations/operations | kind·runId·expectedRunVersion·선택 title/body. 실제 test/build·동일 SHA QA PASS 및 scope를 재검사하고 durable operation을 202로 반환 |
+| POST /projects/:id/integrations/operations/:operationId/reconcile | UNKNOWN GitHub 작업만 읽기 재조회, 중복 발행 없음 |
+
+kind는 ISSUE_CREATE/BRANCH_CREATE/PUSH_CANDIDATE/DRAFT_PR_CREATE/CI_REFRESH/MERGE_REQUEST/SLACK_REPORT다. operation SUCCEEDED는 해당 작업 확인의 성공이며 CI_REFRESH의 실제 검사 판정은 externalRef.status와 headSha·required를 확인한다. MISSING/NOT_PASSED를 검사 통과로 표시하지 않는다. MERGE_REQUEST는 scope 기록만 수행하며 승인·실제 merge를 실행하지 않는다. 실행 응답의 staffing은 해당 실행에 고정된 세 역할 프로필이고 사무실 응답의 employeeId/profileVersion/assignmentStatus는 현재 배정에 맞는 투영이다.
+
+공개 webhook `/api/webhooks/github/:connectionId`, `/api/webhooks/slack/:connectionId`는 Owner 쿠키 대신 raw body 서명·설치/team/channel/user scope와 durable delivery dedupe를 검사한다. Slack의 서명 inbox ACK는 업무 생성·실행·승인 완료를 의미하지 않는다. GitHub installation/token과 Slack 비밀값을 브라우저로 설정하는 API는 제공하지 않는다.
+
 ## Phase 2 사무실 구현 보충 — 2026-10-19
 
 `GET /projects/:id/snapshot`은 같은 REPEATABLE READ 트랜잭션에서 `{projectId,cursor,tasks,agents,approvals,syncedAt}`을 반환한다. agents는 PM/DEVELOPER/QA 각 1명이며 직원 state, 별도 taskStatus/runStatus/stage, 연결 taskId/runId, 작업 설명·위치, version, evidenceSha, lastCompletedAt, 완료된 응답 usage, activeAssignments를 포함한다. 원시 프롬프트·파일·검증 로그·lease는 이 투영에 포함하지 않는다. approvals는 실제 WAITING_APPROVAL 실행의 id/runId/taskId/candidateSha/status/version 요약이다.

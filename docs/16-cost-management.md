@@ -1,5 +1,11 @@
 # 토큰·비용·예산 관리
 
+## Phase 3 비용 경계 — 2026-10-19
+
+사용자는 학생 GitHub Pro 이용을 알렸다. GitHub Pro와 Codex/Copilot 구독은 별도 제품이므로 서로의 포함량으로 환산하지 않는다. 직원 실행은 기존 Codex 구독만 사용한다. GitHub Actions의 비공개 저장소 초과분·대형 runner·저장 공간, Slack 유료 기능·플랜 업그레이드, 유료 호스팅/터널/도메인은 자동 구매하지 않는다. 추가 비용이 필요한 설정은 금액·대상·한도를 확인해 실행 전에 알리고 사용자 판단을 받는다.
+
+이번 adapter는 Actions 조회만 지원하며 hosted workflow 생성/dispatch·유료 runner 생성 API는 제공하지 않는다. 로컬 test/build와 외부 CI 결과는 별도 근거다. [GitHub Actions 과금 문서](https://docs.github.com/en/billing/concepts/product-billing/github-actions)(열람 2026-10-19, 변경일 미공개)는 비공개 저장소 포함량 초과 과금과 larger runner 별도 과금을 설명한다. 계정 전체의 실제 사용/결제 설정은 별도 확인 대상이며 추정 무료액을 청구 확인액으로 표시하지 않는다.
+
 ## Phase 1 구독 전용 구현 보충 — 2026-10-19
 
 현재는 [ADR-011](17-decision-log.md)의 ChatGPT 구독 전용 경로다. 아래 API 단가/금액 예약 ledger는 확장 설계이며 현재 실행에 적용하지 않는다. API 키·다른 공급자 fallback·크레딧 구매/자동 충전 API는 미지원이다. 세 역할과 다른 Codex 사용이 같은 구독 한도를 공유한다.

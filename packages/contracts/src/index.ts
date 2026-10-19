@@ -67,7 +67,7 @@ export const taskSchema = z.strictObject({
   priority: taskPrioritySchema, status: taskStatusSchema, statusLabelKo: z.string(), blockedReason: z.string().nullable(),
   version: versionSchema, createdBy: idSchema, createdAt: dateSchema, updatedAt: dateSchema, latestRunId: idSchema.nullable(),
 });
-export const eventTypes = ["project.created", "project.updated", "task.created", "task.updated", "task.status.changed", "workflow.run.created", "workflow.run.updated", "agent.completed", "approval.requested", "approval.resolved"] as const;
+export const eventTypes = ["project.created", "project.updated", "task.created", "task.updated", "task.status.changed", "workflow.run.created", "workflow.run.updated", "agent.completed", "approval.requested", "approval.resolved", "employee.created", "employee.profile.updated", "employee.employment.changed", "project.staffing.updated", "integration.updated", "integration.operation.updated", "integration.webhook.received", "integration.connection.updated", "integration.merge.requested"] as const;
 export const eventEnvelopeSchema = z.strictObject({
   schemaVersion: z.literal(schemaVersion), eventId: idSchema, organizationId: idSchema, projectId: idSchema.nullable(),
   runId: idSchema.nullable(), taskId: idSchema.nullable(), agentId: idSchema.nullable(), sequence: sequenceSchema,
@@ -77,6 +77,8 @@ export const eventEnvelopeSchema = z.strictObject({
 export const officeRoles = ["PM", "DEVELOPER", "QA"] as const;
 export const officeAgentSchema = z.strictObject({
   id: z.enum(officeRoles), role: z.enum(officeRoles), nameKo: z.string(),
+  employeeId: idSchema.nullable().optional(), profileVersion: versionSchema.nullable().optional(),
+  assignmentStatus: z.enum(["ACTIVE", "SUSPENDED", "RETIRED", "UNASSIGNED"]).optional(),
   state: z.enum(["IDLE", "RUNNING", "WAITING", "REVIEWING", "BLOCKED", "ERROR"]), activityKo: z.string(),
   location: z.enum(["pmDesk", "developerDesk", "qaDesk", "owner", "lounge", "meeting"]),
   taskId: idSchema.nullable(), taskTitle: z.string().nullable(), taskStatus: taskStatusSchema.nullable(), runId: idSchema.nullable(),

@@ -87,6 +87,9 @@ export async function projectOffice(tx: Transaction, organizationId: string, pro
           when pg_input_is_valid(e.evidence->>'completedAt','timestamp with time zone') then (e.evidence->>'completedAt')::timestamptz
           else r.updated_at end as role_updated_at
       from unnest(array['PM','DEVELOPER','QA']) as role(role) cross join scoped_runs r
+      join project_staffing assigned on assigned.organization_id=${organizationId} and assigned.project_id=${projectId} and assigned.role=role.role
+      join employees worker on worker.organization_id=assigned.organization_id and worker.id=assigned.employee_id and worker.employment_status='ACTIVE'
+      left join workflow_staffing_snapshots pinned on pinned.organization_id=assigned.organization_id and pinned.run_id=r.id and pinned.role=role.role
       left join lateral (
         select jsonb_build_object('role',v->>'role','threadId',v->>'threadId','completedAt',v->>'completedAt','candidateSha',v->>'candidateSha',
           'usage',jsonb_build_object('inputTokens',v->'usage'->'inputTokens','cachedInputTokens',v->'usage'->'cachedInputTokens','outputTokens',v->'usage'->'outputTokens')) as evidence
@@ -94,8 +97,9 @@ export async function projectOffice(tx: Transaction, organizationId: string, pro
         where v->>'role'=role.role and jsonb_typeof(v->'threadId')='string' and length(v->>'threadId')>0
         order by position desc limit 1
       ) e on true
-      where r.current_role=role.role or e.evidence is not null
-        or (r.current_role is null and role.role='PM' and r.status in ('QUEUED','RUNNING','PAUSED','BLOCKED','WAITING_APPROVAL'))
+      where (r.current_role=role.role or e.evidence is not null
+        or (r.current_role is null and role.role='PM' and r.status in ('QUEUED','RUNNING','PAUSED','BLOCKED','WAITING_APPROVAL')))
+        and (pinned.employee_id=worker.id or (pinned.employee_id is null and worker.is_baseline))
     ), ranked as (
       select *,count(*) filter (where active) over(partition by role)::integer as active_assignments,
         row_number() over(partition by role order by active desc,
@@ -108,10 +112,33 @@ export async function projectOffice(tx: Transaction, organizationId: string, pro
     from unnest(array['PM','DEVELOPER','QA']) as role(role) left join ranked r on r.role=role.role and r.rank=1
     order by array_position(array['PM','DEVELOPER','QA'],role.role)`;
   const byRole = new Map(rows.map((row) => [row.role, row]));
+  const assignments = await tx<{ role: OfficeAgent['role']; employee_id: string; name_ko: string; employment_status: 'ACTIVE' | 'SUSPENDED' | 'RETIRED'; is_baseline: boolean }[]>`
+    select a.role,e.id as employee_id,e.name_ko,e.employment_status,e.is_baseline from project_staffing a
+    join employees e on e.organization_id=a.organization_id and e.id=a.employee_id
+    where a.organization_id=${organizationId} and a.project_id=${projectId}`;
+  const pinned = await tx<{ run_id: string; role: OfficeAgent['role']; employee_id: string; profile_version: number; name_ko: string }[]>`
+    select s.run_id,s.role,s.employee_id,s.profile_version,s.profile->>'nameKo' as name_ko from workflow_staffing_snapshots s
+    join workflow_runs r on r.organization_id=s.organization_id and r.id=s.run_id
+    where r.organization_id=${organizationId} and r.project_id=${projectId}
+      and r.id=any(${rows.map((row) => row.run_id).filter((id): id is string => !!id)})`;
   return officeRoles.map((role) => {
     const row = byRole.get(role);
     if (!row) throw new Error('Office projection is incomplete.');
-    return view(row);
+    const agent = view(row);
+    const assignment = assignments.find((item) => item.role === role);
+    const profile = pinned.find((item) => item.role === role && item.run_id === row.run_id);
+    const active = assignment?.employment_status === 'ACTIVE';
+    const sameEmployee = !!assignment && (profile ? profile.employee_id === assignment.employee_id : assignment.is_baseline);
+    const clearEvidence = !active || !sameEmployee;
+    return officeAgentSchema.parse({ ...agent,
+      employeeId: assignment?.employee_id ?? null, profileVersion: sameEmployee ? profile?.profile_version ?? null : null,
+      assignmentStatus: assignment?.employment_status ?? 'UNASSIGNED',
+      nameKo: assignment ? (sameEmployee && profile ? profile.name_ko : assignment.name_ko) : `${role} 미배정`,
+      ...(clearEvidence ? { state: active ? 'IDLE' : 'BLOCKED', location: 'lounge',
+        activityKo: active ? '배정된 업무를 기다려요.' : assignment ? '현재 업무 배정이 중지되어 있어요.' : '배정된 직원이 없어요.',
+        taskId: null, taskTitle: null, taskStatus: null, runId: null, runStatus: null, stage: null,
+        blockedReason: active ? null : 'STAFFING_PERMISSION_REVOKED', evidenceSha: null, lastCompletedAt: null, usage: null, activeAssignments: 0 } : {}),
+    });
   });
 }
 

@@ -7,6 +7,9 @@ import type { WorkflowRun, SubscriptionState } from '../packages/agents/src/type
 
 // Opt-in only: uses the existing subscription and a real browser/API/SSE path.
 // Default tests never call the model. Result acceptance remains with the Owner.
+const hireEmployee = process.argv.includes('--hire');
+let hiredEmployeeId: string | null = null;
+const hiredName = `검증 개발자 ${randomUUID().slice(0, 8)}`;
 process.env.PLAYWRIGHT_BROWSERS_PATH = resolve('.local/playwright');
 const { chromium, expect } = await import('@playwright/test');
 const browser = await chromium.launch({ headless: true });
@@ -32,7 +35,15 @@ try {
   csrf = (await api<{ csrfToken: string }>('/me')).csrfToken;
   const subscription = await api<SubscriptionState>('/subscription');
   assert(subscription.ready, `Subscription blocked: ${subscription.reason}`);
-  const project = await api<{ id: string; name: string }>('/projects', { name: `실시간 사무실 검증 ${randomUUID().slice(0, 8)}`, repositoryUrl: 'https://github.com/Ina-dang/ai-pixel-company.git', defaultBranch: 'main' });
+  const project = await api<{ id: string; name: string }>('/projects', { name: `${hireEmployee ? '채용 실행 검증' : '실시간 사무실 검증'} ${randomUUID().slice(0, 8)}`, repositoryUrl: 'https://github.com/Ina-dang/ai-pixel-company.git', defaultBranch: 'main' });
+  if (hireEmployee) {
+    const hired = await api<{ id: string }>('/employees', { template: 'DEVELOPER', nameKo: hiredName });
+    hiredEmployeeId = hired.id;
+    const staffing = await api<{ items: { role: string; version: number }[] }>(`/projects/${project.id}/staffing`);
+    const previous = staffing.items.find(item => item.role === 'DEVELOPER');
+    assert(previous, 'Default developer assignment missing');
+    await api(`/projects/${project.id}/staffing`, { role: 'DEVELOPER', employeeId: hired.id, expectedVersion: previous.version }, 'PUT');
+  }
   const task = await api<{ id: string }>(`/projects/${project.id}/tasks`, { title: '픽셀 사무실 실제 PM·개발·QA 연동',
     commandOriginalKo: '덧셈 add와 배열 합계 sum의 오류를 고치고 음수·빈 배열까지 테스트해 주세요. 실제 테스트·빌드 근거를 QA가 검토해 주세요.',
     acceptanceCriteria: [{ id: 'AC-1', descriptionKo: '덧셈·음수·합계·빈 배열이 정확하고 테스트와 빌드가 성공한다.', method: 'unit-test', required: true }], priority: 'MEDIUM' });
@@ -66,22 +77,29 @@ try {
   assert.equal(final.checkpoint.verification?.test.exitCode, 0); assert.equal(final.checkpoint.verification?.build.exitCode, 0);
   const qa = final.checkpoint.roles.filter(role => role.role === 'QA').at(-1);
   assert.equal(qa?.output.verdict, 'PASS'); assert.equal(qa.candidateSha, final.checkpoint.verification.sha);
+  if (hireEmployee) {
+    const pinned = final.staffing?.find(profile => profile.role === 'DEVELOPER');
+    assert.equal(pinned?.employeeId, hiredEmployeeId, 'Executed employee must match the newly hired developer');
+    assert.equal(pinned?.profileVersion, 1);
+    assert.equal(pinned?.nameKo, hiredName);
+    await expect(office.locator('[data-office-agent="DEVELOPER"]')).toContainText(hiredName);
+  }
   await page.reload();
   await page.getByLabel('현재 프로젝트', { exact: true }).selectOption(project.id);
   await expect(office).toHaveAttribute('data-office-state', 'ready');
   await expect(office.locator('[data-office-agent="PM"]')).toHaveAttribute('data-run-id', runId);
   await expect(office.locator('[data-office-agent="PM"]')).toHaveAttribute('data-agent-state', 'WAITING');
   mkdirSync(resolve('test-results'), { recursive: true });
-  await office.screenshot({ path: resolve('test-results/office-live-desktop.png') });
+  await office.screenshot({ path: resolve(`test-results/${hireEmployee ? 'staffing' : 'office'}-live-desktop.png`) });
   await page.setViewportSize({ width: 390, height: 844 });
   await office.getByRole('button', { name: 'QA 직원 상세', exact: true }).click();
   await expect(office.getByRole('heading', { name: 'QA 직원 상세', exact: true })).toBeVisible();
   await expect(office).toContainText(qa.candidateSha);
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Mobile horizontal overflow');
-  await office.screenshot({ path: resolve('test-results/office-live-mobile.png') });
+  await office.screenshot({ path: resolve(`test-results/${hireEmployee ? 'staffing' : 'office'}-live-mobile.png`) });
   assert.deepEqual(pageErrors, []);
   passed = true;
-  console.log(JSON.stringify({ verified: true, runId, candidateSha: qa.candidateSha, liveOfficeStates: [...seen], test: 0, build: 0, qa: 'PASS', reload: true, mobile: 390, pageErrors: 0, ownerAcceptance: 'PENDING' }));
+  console.log(JSON.stringify({ verified: true, runId, candidateSha: qa.candidateSha, hiredEmployeeId, liveOfficeStates: [...seen], test: 0, build: 0, qa: 'PASS', reload: true, mobile: 390, pageErrors: 0, ownerAcceptance: 'PENDING' }));
 } catch (error) {
   const owner = readFileSync(resolve('.local/owner-key'), 'utf8').trim();
   const message = (error instanceof Error ? error.message : String(error)).replaceAll(owner, '[REDACTED]')

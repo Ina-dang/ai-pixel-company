@@ -199,4 +199,13 @@ export const eventLabels: Record<string, string> = {
   "agent.completed": "직원 작업 결과 기록",
   "approval.requested": "결과 수락 요청",
   "approval.resolved": "결과 수락 처리",
+  "employee.created": "직원 채용",
+  "employee.profile.updated": "직원 프로필 변경",
+  "employee.employment.changed": "직원 재직 상태 변경",
+  "project.staffing.updated": "프로젝트 직원 배정 변경",
+  "integration.updated": "외부 연동 설정 변경",
+  "integration.operation.updated": "외부 연동 작업 상태 변경",
+  "integration.webhook.received": "외부 연동 알림 수신",
+  "integration.connection.updated": "외부 연동 연결 변경",
+  "integration.merge.requested": "병합 승인 요청",
 };

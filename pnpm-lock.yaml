@@ -14,6 +14,9 @@ importers:
       '@ai-pixel/db':
         specifier: workspace:*
         version: link:packages/db
+      '@ai-pixel/integrations':
+        specifier: workspace:*
+        version: link:packages/integrations
       '@biomejs/biome':
         specifier: 2.5.15
         version: 2.5.15
@@ -53,6 +56,9 @@ importers:
       '@ai-pixel/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@ai-pixel/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@hono/node-server':
         specifier: 2.1.5
         version: 2.1.5(hono@4.13.13)
@@ -160,6 +166,18 @@ importers:
       tsx:
         specifier: 4.23.15
         version: 4.23.15
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@22.18.6)(vite@8.3.4(@types/node@22.18.6)(esbuild@0.28.2)(tsx@4.23.15))
+
+  packages/integrations:
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.6
+        version: 22.18.6
       typescript:
         specifier: 5.9.3
         version: 5.9.3

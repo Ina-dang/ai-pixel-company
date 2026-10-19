@@ -6,6 +6,7 @@ import {
   type CompanyEvent, type Project, type RoleEvidence, type Session, type Snapshot, type SubscriptionState, type Task, type TaskDetail, type WorkflowRun,
 } from "./api";
 import { PixelOffice } from './office';
+import { CollaborationWorkspace } from './collaboration';
 import { chooseSnapshot, ProjectEventGate } from './office-model';
 
 type Submission = { body: string; key: string } | null;
@@ -294,7 +295,7 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
             if (!controller.signal.aborted && failure instanceof ApiError && failure.status === 401) { connected.close(); onError(failure); }
           }).finally(() => { probing = false; });
       };
-      for (const type of ["task.created", "project.created", "task.updated", "task.status.changed", "workflow.run.created", "workflow.run.updated", "agent.completed", "approval.requested", "approval.resolved"]) connected.addEventListener(type, receive as EventListener);
+      for (const type of ["task.created", "project.created", "task.updated", "task.status.changed", "workflow.run.created", "workflow.run.updated", "agent.completed", "approval.requested", "approval.resolved", "employee.created", "employee.profile.updated", "employee.employment.changed", "project.staffing.updated", "integration.updated", "integration.operation.updated", "integration.webhook.received", "integration.connection.updated", "integration.merge.requested"]) connected.addEventListener(type, receive as EventListener);
       connected.onmessage = receive;
       connected.addEventListener("stream.auth-error", () => {
         connected.close();
@@ -339,6 +340,7 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
       setSelectedTaskId(id);
       window.requestAnimationFrame(() => document.querySelector('.task-detail')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
     }} />
+    <CollaborationWorkspace projectId={project.id} tasks={tasks} session={session} refreshKey={refreshKey} onOpenTask={setSelectedTaskId} onChanged={() => { void reloadRef.current?.(); }} onError={onError} />
     <section className="summary-grid" aria-label="프로젝트 현황">
       <SummaryCard label="등록된 업무" value={snapshot ? String(tasks.length) : "—"} suffix="건" caption="서버에 저장된 전체 업무" />
       <SummaryCard label="직원 실행 방식" value="Codex" caption="PM → Developer → QA · 순차 실행" subdued />

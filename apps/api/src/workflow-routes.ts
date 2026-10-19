@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { pinRunStaffing, readRunStaffing } from './staffing.js';
 import type { AgentProvider, Checkpoint } from '@ai-pixel/agents';
 import { idSchema } from '@ai-pixel/contracts';
 import type { Database, Transaction } from '@ai-pixel/db';
@@ -55,7 +56,7 @@ export function workflowRoutes(database: Database, provider?: AgentProvider) {
     const task = await database.sql`select 1 from tasks where organization_id=${organizationId} and id=${id}`;
     if (!task.length) throw new ApiError(404, 'NOT_FOUND', '업무를 찾을 수 없습니다.');
     const rows = await database.sql<WorkflowRow[]>`select * from workflow_runs where organization_id=${organizationId} and task_id=${id} order by created_at desc,id desc limit 100`;
-    return c.json({ data: { items: rows.map(publicWorkflow) }, requestId: c.get('requestId') });
+    return c.json({ data: { items: rows.map(row => publicWorkflow(row)) }, requestId: c.get('requestId') });
   });
   routes.post('/tasks/:id/runs', async (c) => {
     const id = validId(c.req.param('id'));
@@ -72,15 +73,16 @@ export function workflowRoutes(database: Database, provider?: AgentProvider) {
       if (active.length) throw new ApiError(409, 'ACTIVE_RUN_EXISTS', '이미 진행 중인 실행이 있습니다.');
       const created = await tx<WorkflowRow[]>`insert into workflow_runs (id,organization_id,project_id,task_id,command_original_ko,fixture,checkpoint)
         values (${randomUUID()},${organizationId},${task.project_id},${id},${task.command_original_ko},${body.fixture},${tx.json(jsonValue(initialCheckpoint()))}) returning *`;
+      const staffing = await pinRunStaffing(tx, organizationId, task.project_id, created[0].id);
       await recordWorkflow(tx, created[0], undefined, 'workflow.run.created');
       await audit(tx, c, 'workflow.run.created', 'workflow_run', created[0].id, task.project_id);
-      return { status: 201, data: publicWorkflow(created[0]) };
+      return { status: 201, data: publicWorkflow(created[0], staffing) };
     });
   });
   routes.get('/runs/:id', async (c) => {
     const rows = await database.sql<WorkflowRow[]>`select * from workflow_runs where organization_id=${c.get('auth').organizationId} and id=${validId(c.req.param('id'))}`;
     if (!rows[0]) throw new ApiError(404, 'NOT_FOUND', '실행을 찾을 수 없습니다.');
-    return c.json({ data: publicWorkflow(rows[0]), requestId: c.get('requestId') });
+    return c.json({ data: publicWorkflow(rows[0], await readRunStaffing(database.sql, rows[0].id)), requestId: c.get('requestId') });
   });
   routes.post('/runs/:id/control', async (c) => {
     const id = validId(c.req.param('id'));

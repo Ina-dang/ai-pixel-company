@@ -1,6 +1,13 @@
 export type Role = 'PM' | 'DEVELOPER' | 'QA';
 export type RunStatus = 'QUEUED' | 'RUNNING' | 'PAUSED' | 'BLOCKED' | 'WAITING_APPROVAL' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
 export type Stage = 'PM' | 'DEVELOPER' | 'VERIFY' | 'QA';
+export type StaffingTool = 'PLAN' | 'EDIT_FILES' | 'VERIFY' | 'REVIEW';
+export interface StaffingProfile {
+  employeeId: string; role: Role; nameKo: string; profileVersion: number;
+  provider: 'CHATGPT_SUBSCRIPTION'; model: 'codex-default'; rolePrompt: string; skills: string[];
+  departmentKo: string; workStyleKo: string; tools: StaffingTool[];
+  limits: { maxTurns: number; maxTokens: number; maxElapsedMs: number }; avatar: 'pm' | 'developer' | 'qa';
+}
 export interface FileContent { path: string; content: string }
 export interface Workspace { files: FileContent[]; sha: string; diff: string }
 export interface Verification {
@@ -39,6 +46,7 @@ export interface WorkflowRun {
   commandOriginalKo: string; status: RunStatus; version: number;
   leaseToken: string | null; leaseExpiresAt: string | null;
   checkpoint: Checkpoint; createdAt: string; updatedAt: string;
+  staffing?: StaffingProfile[];
 }
 export interface WorkflowStore {
   claim(): Promise<WorkflowRun | null>;
@@ -47,6 +55,7 @@ export interface WorkflowStore {
   heartbeat(id: string, leaseToken: string): Promise<boolean>;
   recover(): Promise<number>;
   acknowledgeStop(id: string, leaseToken: string): Promise<boolean>;
+  authorizeRole?(id: string, role: Role, tools: StaffingTool[]): Promise<StaffingProfile>;
 }
 export interface SubscriptionState {
   ready: boolean;

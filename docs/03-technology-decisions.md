@@ -1,5 +1,11 @@
 # 기술 검증과 선택
 
+## Phase 3 실제 조합 — 2026-10-19
+
+추가 외부 SDK 없이 Node crypto/fetch와 고정 GitHub REST `2022-11-28` 헤더로 App JWT·repository-scoped installation token·Issue/branch/push/draft PR/checks/statuses를 구현했다. 기존 지원 API 버전을 유지하며 새 최신 API 채택으로 표시하지 않는다. 실제 App이 생성한 시험 PR과 현재 head 조회는 README에 기록한다. Slack은 auth.test/chat.postMessage 및 raw request HMAC 검증을 사용하며 HTTP 서명 수신과 Socket Mode를 혼용하지 않는다. 실제 Slack 보고·외부 HTTPS ingress는 별도 시험이다.
+
+채용/배정/고용 이력과 고정 실행 프로필은 기존 PostgreSQL migration 0003, durable integration operations/inbox/merge scope는 0004에 추가했다. 별도 유료 모델·큐·호스팅을 추가하지 않았다. 근거: [GitHub API 버전](https://docs.github.com/en/rest/about-the-rest-api/api-versions), [installation token](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app), [Slack 요청 검증](https://docs.slack.dev/authentication/verifying-requests-from-slack/). 열람 2026-10-19, 개별 변경일 미공개.
+
 ## Phase 2 실제 조합 — 2026-10-19
 
 기존 Next16.4.2/React19.3.1 조합에 Phaser3.90.0을 정확히 고정했다. 공식 Phaser3 버전 문서와 설치 package의 MIT license를 확인했다. Phaser 기본 문서는 4 계열이므로 이 구현의 근거는 3.90.0 문서다. `import * as Phaser`와 브라우저 effect의 동적 import로 실제 프로덕션 빌드를 검증했다. 서버 렌더링에서 Phaser를 실행하지 않는다.
