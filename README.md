@@ -4,7 +4,7 @@
 
 자연어 업무 지시를 PM·Developer·QA AI의 실제 개발 작업으로 연결하고, 검증된 실행 상태를 픽셀 사무실에 표시하는 AI 회사 운영 플랫폼이다.
 
-**현재 상태: Phase 0 및 Phase 1의 Codex 구독 기반 핵심 실행 경로 구현·로컬 검증 완료. 현재 코드 실행 대상은 제한된 Node 함수 fixture이며 임의 저장소 실행은 지원하지 않는다.**
+**현재 상태: Phase 0 기반·Phase 1 구독 실행 핵심 경로·Phase 2 픽셀 사무실을 구현하고 로컬 검증했다. 현재 코드 실행 대상은 제한된 Node 함수 fixture이며 임의 저장소 실행은 지원하지 않는다.**
 
 - B단계: Phase 0 기반 → Phase 1 실제 AI 실행 → Phase 2 픽셀 사무실.
 - C단계: Phase 3 GitHub·Slack·채용 → Phase 4 평가·다중 프로젝트·운영.
@@ -52,17 +52,26 @@ ChatGPT 인증을 강제하고 API 키·공급자 URL·DB 비밀정보 환경변
 
 종료 확인 실패 시 전체 worker를 차단하며 DB와 `.local/codex-worker/unsafe-stop.json`에 재시작 후에도 유지되는 interlock을 남긴다. 이 경우 자동 재개/초기화하지 않는다. 기록된 프로세스 트리와 컨테이너의 실제 종료를 운영자가 확인한 후 별도 복구해야 한다. 만료된 lease의 실행도 `RECOVERY_REQUIRED`로 중단해 알 수 없는 모델 호출을 자동 재실행하지 않는다.
 
+## 픽셀 사무실
+
+대시보드의 사무실은 대표실·개발실·회의실·QA실·공용 공간과 PM/Developer/QA 세 직원을 보여준다. Phaser3.90.0은 client-only로 로드하고, 896×512 Tiled JSON 및 직접 작성한 CC0 픽셀 타일/스프라이트를 사용한다. 외부 이미지·폰트·원격 코드를 로드하지 않는다. 직원 클릭이나 키보드 선택으로 실제 업무/실행/검증 SHA/완료된 응답 토큰을 확인한다. 승인 action은 별도 업무 상세에 유지한다.
+
+서버는 같은 repeatable-read snapshot에서 업무·직원·승인·이벤트 cursor를 읽는다. 직원 상태는 실제 run 단계·제어 상태·역할별 결과에서 계산하며, 말풍선은 고정 한국어 문구다. SSE는 서버 snapshot을 새로 조회하게 할 뿐 직접 상태를 결정하지 않는다. 중복/역순·다른 프로젝트·동일 실행 version 역행을 거르고, 재접속/탭 복귀/명시적 reset에서 복원한다. 연결 단절 시 마지막 확인 시각을 표시하고 움직임을 멈춘다. 그래픽 오류·그래픽 끄기 상태에도 DOM 직원 목록과 상세가 동작한다. 장면 해제 시 canvas/listener/timer를 정리한다.
+
+`pnpm test:e2e`는 모델을 호출하지 않는 브라우저 회귀 검증이다. `pnpm verify:office-live`는 기존 구독 한도를 사용하는 명시적 실험으로 실제 PM→Developer→QA 실행과 브라우저 사무실의 SSE 상태 전환·새로고침·모바일 화면을 확인한다. 포함 한도/차단 정책은 Phase 1과 같으며 결과를 자동 수락하지 않는다.
+
 ## 실제 검증 결과 — 2026-10-19
 
 | 검사 | 결과 |
 |---|---|
 | `pnpm lint` | 통과, 오류·경고 없음 |
 | `pnpm typecheck` | 6개 workspace 및 테스트/스크립트 통과 |
-| `pnpm test` | 69개: Phase0 17 + Phase1 DB/API 18 + workflow 16 + Sandbox 8 + DB 4 + 계약 6 |
+| `pnpm test` | 97개: Phase0 17 + Phase1 18 + Phase2 19 + workflow 16 + Sandbox 8 + DB 4 + 계약 7 + office 8 |
 | `pnpm verify:contracts` | TypeScript fixture 16개·Python JSON Schema fixture 26개 통과 |
 | `pnpm build` | Next 프로덕션 빌드·API/공유 패키지 타입 빌드 통과 |
-| `pnpm test:e2e` | Chromium 5개 통과: 기반 흐름 및 quota/제어/증거/동일 SHA 승인/390px |
-| `pnpm verify:agents` | 실제 구독 PM/Developer/QA, 코드·추가 테스트 파일 수정, test/build exit0, QA PASS, Owner 수락 대기. 저장된 실행 수동 재개도 성공 |
+| `pnpm test:e2e` | Chromium 12개 통과: 기존5 + 사무실7. 상태 전환/동시 직원/역순/재접속/초기 장애 복구/권한 철회/자산 실패/그래픽 해제/390px |
+| `pnpm verify:agents` | Phase 1 실제 구독 PM/Developer/QA, 코드·추가 테스트 파일 수정, test/build exit0, QA PASS. 저장된 실행 수동 재개 성공, 아래 최종 결과는 사용자 지시로 수락 |
+| `pnpm verify:office-live` | 실제 Codex→브라우저 PM 작업/Developer 작업/QA 검토 관측, 동일 SHA test/build0·QA PASS, reload/390px·page error0. 새 결과는 수락 대기 |
 | `pnpm audit` | 검사 시점 패키지 취약점 보고 0개. 런타임 전체 안전성 보장은 아님 |
 | DB 컨테이너 재시작 | 프로젝트 2개·업무 4개·이벤트 cursor 6 유지 확인 |
 | Python HTTP 가용성 | stdlib 임시 loopback 서버 HTTP 200. LangGraph 실행 시험과 다름 |
@@ -71,7 +80,11 @@ ChatGPT 인증을 강제하고 API 키·공급자 URL·DB 비밀정보 환경변
 
 코드 리뷰에서 확인한 페이지 누락·이벤트 필드·재실행 가능한 브라우저 fixture 문제를 수정했다. 실제 브라우저에서 발견한 Next gzip/SSE 버퍼링은 프록시 압축 비활성화 및 identity 스트림으로 해결했다. PostgreSQL 타임스탬프의 마이크로초를 pagination cursor에 보존하는 회귀 검증도 포함한다.
 
-Phase 1 최종 실제 실행: run `d17da4a3-443d-41d4-b9f1-7279ea54c15e`, manifest SHA256 `b97f16c03ed55616d740e5529f8800a9653bea7e3d8e99db0972723bf992943a`. `src/math.mjs`와 `test/extra-negative.mjs`가 변경되었고 실제 test/build0·QA PASS다. 중단된 Developer 단계에서 기존 PM/작업 폴더를 보존해 수동 재개했으며 총4회 호출을 기록한다. 구독 한도를 실제로 소진시키는 시험은 수행하지 않았고 한도/종료 불명 경계는 통제된 자동 시험으로 검증했다.
+Phase 1 최종 실제 실행: run `d17da4a3-443d-41d4-b9f1-7279ea54c15e`, manifest SHA256 `b97f16c03ed55616d740e5529f8800a9653bea7e3d8e99db0972723bf992943a`. `src/math.mjs`와 `test/extra-negative.mjs`가 변경되었고 test/build0·QA PASS다. 기존 PM/작업 폴더를 보존한 수동 재개 포함 총4회 호출을 기록한다. 2026-10-19 사용자의 수락 지시에 따라 실제 파일 SHA를 재확인하고 SUCCEEDED/task COMPLETED로 반영했다. 구독 한도를 실제로 소진시키는 시험은 수행하지 않았다.
+
+Phase 2 실제 브라우저 연동 실행: 프로젝트 `실시간 사무실 검증 7229690d`, run `371918c2-6791-4f28-bb5e-b11187b8d641`, manifest SHA256 `76adf5777f4eec555b3692c49789bfa72f5a09d6379976028326880c35ee08fe`. ChatGPT 인증의 실제 PM/Developer/QA 각 응답과 사무실의 PM RUNNING→Developer RUNNING→QA REVIEWING→PM WAITING을 관측했다. `node --test test/extra-negative.mjs test/math.test.mjs`와 `node build.mjs` exit0·동일 SHA QA PASS를 확인했고, 물리 파일을 다시 읽어 저장 SHA와 일치함을 확인했다. 최종 상태는 WAITING_APPROVAL이며 자동 수락하지 않았다. 데스크톱·390px 스크린샷은 `test-results/office-live-desktop.png`, `test-results/office-live-mobile.png`에 로컬 저장한다(Git 제외).
+
+위 성공에 앞선 첫 브라우저 드라이버 실행은 PM 후 실패하여 안전하게 취소했다(진단 메시지 보완 전이라 정확한 원인은 확인 불가). 두 번째는 실제 테스트6개·빌드가 통과했으나 QA가 실행 명령 누락을 지적했고 재작업이 NO_CODE_CHANGE로 차단되어 성공으로 기록하지 않았다. 브로커의 실제 argv 기록을 보완하고 Docker 회귀 시험 및 전체 검증 후 위 새 실행이 통과했다. 실패 실행은 진단 이력을 보존하고 취소했다. 무한 재시도나 결과 자동 수락은 하지 않았다.
 
 ## 검증 범위와 확인 경로
 
@@ -79,8 +92,8 @@ Phase 1 최종 실제 실행: run `d17da4a3-443d-41d4-b9f1-7279ea54c15e`, manife
 
 ✅ Phase 0은 실제 PostgreSQL·Hono·Next와 브라우저를 연결해 검증했다. 세션 hash 저장/만료/철회, CSRF/Origin, tenant FK/조회, idempotency, version 경합, 원문 보존, 상태 이력, SSE replay/reset/권한 철회가 테스트 대상이다.
 
-⚠️ 현재 Sandbox는 소유한 고정 fixture만 지원한다. 임의 저장소·의존성 설치·외부 네트워크·GitHub/Slack App·픽셀 사무실은 미구현이다. Redis/Python LangGraph는 구독 로컬 경로에 맞춰 PostgreSQL 큐/Node worker로 대체했다(ADR-011). 한국어/영어 비용·품질 비교 실험은 미실행이며 영어 효율을 주장하지 않는다.
+⚠️ 현재 Sandbox는 소유한 고정 fixture만 지원한다. 임의 저장소·의존성 설치·외부 네트워크·GitHub/Slack App은 미구현이다. Redis/Python LangGraph는 구독 로컬 경로에 맞춰 PostgreSQL 큐/Node worker로 대체했다(ADR-011). 한국어/영어 비용·품질 비교 실험은 미실행이며 영어 효율을 주장하지 않는다. 사무실은 고정 세 역할의 프로젝트별 투영이며 채용·회의 시뮬레이션·대규모 조직은 후속 범위다.
 
 ## 구현 범위 판정
 
-**Phase 0 완료 / Phase 1 제한 fixture 핵심 경로 검증 완료**. 전체 Phase 1 계획을 모두 완료했다고 주장하지 않는다. 범용 저장소 실행은 새로운 격리/의존성/수용 기준 검증이 필요하다. 운영 배포·merge·유료 자원 생성은 수행하지 않았다. 공식 인증/한도 근거는 [OpenAI 인증](https://learn.chatgpt.com/docs/auth), [구독 사용](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan), [app-server quota](https://learn.chatgpt.com/docs/app-server)를 따른다(열람 2026-10-19, 개별 변경일 미공개).
+**Phase 0 완료 / Phase 1 제한 fixture 핵심 경로 검증 / Phase 2 로컬 픽셀 사무실 검증**. 범용 저장소와 언어 비교가 남은 전체 Phase 1 계획 또는 운영 B 출시를 모두 완료했다고 주장하지 않는다. 운영 배포·merge·유료 자원 생성은 수행하지 않았다. 공식 구독 근거는 [OpenAI 인증](https://learn.chatgpt.com/docs/auth), 그래픽 계약은 [Phaser3.90 Tilemap](https://docs.phaser.io/api-documentation/3.90.0/class/tilemaps-tilemap)·[Tiled JSON](https://doc.mapeditor.org/en/stable/reference/json-map-format/)을 따른다(열람 2026-10-19, 개별 변경일 미공개).

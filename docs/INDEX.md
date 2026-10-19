@@ -1,6 +1,6 @@
 # 문서 목차
 
-최신성 체크: 2026-10-19. Phase 0 및 Phase 1의 Codex 구독 기반 제한 fixture 핵심 경로를 구현·검증했다. 현재 구성은 ADR-011을 따르며 아래 전체 확장 설계와 구분한다. 언어 비교·범용 저장소·Phase 2~5는 미구현/미검증이다. 실제 결과와 실행 절차는 README·IMPLEMENTATION_CHECKLIST를 따른다.
+최신성 체크: 2026-10-19. Phase 0, Phase 1의 Codex 구독 기반 제한 fixture 핵심 경로와 Phase 2 픽셀 사무실을 구현·검증했다. 자동 시험97개·Chromium12개와 TS16/Python26 계약 fixture를 검증한다. 현재 구성은 ADR-011을 따르며 아래 전체 확장 설계와 구분한다. 언어 비교·범용 저장소·Phase 3~5는 미구현/미검증이다. 실제 실행의 성공·중단 결과와 절차는 README·IMPLEMENTATION_CHECKLIST를 따른다.
 
 | 파일 | 목적 | 상태 |
 |---|---|---|

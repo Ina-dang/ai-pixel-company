@@ -5,8 +5,8 @@ export interface FileContent { path: string; content: string }
 export interface Workspace { files: FileContent[]; sha: string; diff: string }
 export interface Verification {
   sha: string;
-  test: { exitCode: number; output: string };
-  build: { exitCode: number; output: string };
+  test: { command?: string[]; exitCode: number; output: string };
+  build: { command?: string[]; exitCode: number; output: string };
   sandbox: { networkDisabled: boolean; readOnlyRoot: boolean; resourceLimited: boolean };
   verifiedAt: string;
 }

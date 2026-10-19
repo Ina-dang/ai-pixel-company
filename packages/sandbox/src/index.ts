@@ -7,8 +7,8 @@ export interface WorkspaceFile { path: string; content: string }
 export interface WorkspaceSnapshot { files: WorkspaceFile[]; sha: string; diff: string }
 export interface Verification {
   sha: string;
-  test: { exitCode: number; output: string };
-  build: { exitCode: number; output: string };
+  test: { command?: string[]; exitCode: number; output: string };
+  build: { command?: string[]; exitCode: number; output: string };
   sandbox: { networkDisabled: boolean; readOnlyRoot: boolean; resourceLimited: boolean };
   verifiedAt: string;
 }
@@ -241,9 +241,11 @@ export class DockerSandbox {
       checkAbort(signal);
       const before = await this.readSnapshot(runId);
       const tests = before.files.filter((file) => file.path.startsWith('test/') && file.path.endsWith('.mjs')).map((file) => file.path);
-      const test = await this.container(runId, ['--test', ...tests], this.path(runId), signal);
+      const testArgs = ['--test', ...tests];
+      const test = { command: ['node', ...testArgs], ...await this.container(runId, testArgs, this.path(runId), signal) };
       checkAbort(signal);
-      const build = await this.container(runId, ['build.mjs'], this.path(runId), signal);
+      const buildArgs = ['build.mjs'];
+      const build = { command: ['node', ...buildArgs], ...await this.container(runId, buildArgs, this.path(runId), signal) };
       const after = await this.readSnapshot(runId);
       if (after.sha !== before.sha) fail('CANDIDATE_CHANGED_DURING_VERIFICATION');
       return { sha: before.sha, test, build, sandbox: { networkDisabled: true, readOnlyRoot: true, resourceLimited: true }, verifiedAt: new Date().toISOString() };

@@ -1,5 +1,13 @@
 # API 계약
 
+## Phase 2 사무실 구현 보충 — 2026-10-19
+
+`GET /projects/:id/snapshot`은 같은 REPEATABLE READ 트랜잭션에서 `{projectId,cursor,tasks,agents,approvals,syncedAt}`을 반환한다. agents는 PM/DEVELOPER/QA 각 1명이며 직원 state, 별도 taskStatus/runStatus/stage, 연결 taskId/runId, 작업 설명·위치, version, evidenceSha, lastCompletedAt, 완료된 응답 usage, activeAssignments를 포함한다. 원시 프롬프트·파일·검증 로그·lease는 이 투영에 포함하지 않는다. approvals는 실제 WAITING_APPROVAL 실행의 id/runId/taskId/candidateSha/status/version 요약이다.
+
+직원 상태는 서버가 실행/완료 근거에서 계산한다. SSE는 snapshot 재조회 신호이며 브라우저가 최종 상태를 결정하지 않는다. 브라우저는 조직 sequence·이벤트 중복·프로젝트 범위·같은 실행 version 역행을 검사한다. stream.reset은 새 snapshot/cursor로 복구하고 stream.auth-error는 세션과 사무실을 비운다. syncedAt은 서버 시각이다.
+
+새 Sandbox 검증 결과의 test/build에는 실제 실행 argv인 command 배열을 추가한다. 과거 저장 checkpoint와의 호환을 위해 타입에서는 선택 필드지만 새 브로커 실행은 `node --test <실제 테스트 파일들>` 및 `node build.mjs`를 SHA·exitCode·output과 함께 기록한다.
+
 ## Phase 1 구독 실행 구현 보충 — 2026-10-19
 
 다음 경로는 /api/v1 기준이며 Owner 세션 인증을 받는다. 쓰기에는 Origin/CSRF·Idempotency-Key가 필요하며 제어/수락에는 expectedVersion을 검사한다. 응답은 {data,requestId} envelope다.

@@ -5,6 +5,8 @@ import {
   api, allProjects, ApiError, errorMessage, eventLabels, formatTime,
   type CompanyEvent, type Project, type RoleEvidence, type Session, type Snapshot, type SubscriptionState, type Task, type TaskDetail, type WorkflowRun,
 } from "./api";
+import { PixelOffice } from './office';
+import { chooseSnapshot, ProjectEventGate } from './office-model';
 
 type Submission = { body: string; key: string } | null;
 
@@ -124,7 +126,7 @@ export function Dashboard() {
       <div className="workspace-label">WORKSPACE</div>
       <div className="organization-name">{session.organization.name}</div>
       <nav><a className="nav-link active" href="#main-content" aria-current="page"><span aria-hidden="true">▦</span> 회사 대시보드</a></nav>
-      <div className="sidebar-note"><span className="tiny-square" aria-hidden="true" /><strong>근거와 함께 일하는 직원</strong><p>계획, 코드, 검증 결과를<br />확인하고 수락하세요.</p><span className="phase-pill">PHASE 1 · AGENTS</span></div>
+      <div className="sidebar-note"><span className="tiny-square" aria-hidden="true" /><strong>근거와 함께 일하는 직원</strong><p>계획, 코드, 검증 결과를<br />확인하고 수락하세요.</p><span className="phase-pill">PHASE 2 · PIXEL OFFICE</span></div>
       <div className="owner-profile"><span className="avatar" aria-hidden="true">O</span><div><strong>{session.user.displayName}</strong><small>Owner · 로컬 세션</small></div><button className="logout" type="button" onClick={() => void logout()} disabled={busy}>로그아웃</button></div>
     </aside>
     <div className="content-shell">
@@ -202,6 +204,7 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadingError, setLoadingError] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const reloadRef = useRef<(() => Promise<Snapshot | undefined>) | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [subscriptionError, setSubscriptionError] = useState("");
@@ -229,27 +232,49 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
   useEffect(() => {
     const controller = new AbortController();
     let stream: EventSource | undefined;
-    let generation = 0;
     let probing = false;
-    const seen = new Set<string>();
-    const refresh = async () => {
-      const request = ++generation;
-      try {
-        const loaded = await api<Snapshot>(`/projects/${encodeURIComponent(project.id)}/snapshot`, { signal: controller.signal });
-        if (!controller.signal.aborted && request === generation) { setSnapshot(loaded); setLoadingError(""); }
-        return loaded;
-      } catch (failure) {
-        if (!controller.signal.aborted) { setLoadingError(errorMessage(failure)); onError(failure); }
-      }
+    let current: Snapshot | null = null;
+    let pending: Promise<Snapshot | undefined> | null = null;
+    let dirty = false, resetRequested = false;
+    let recoveryTimer: number | undefined;
+    const gate = new ProjectEventGate(project.id, '0');
+    const refresh = (reset = false): Promise<Snapshot | undefined> => {
+      if (reset) resetRequested = true;
+      if (pending) { dirty = true; return pending; }
+      pending = (async () => {
+        let result: Snapshot | undefined;
+        do {
+          dirty = false;
+          const force = resetRequested; resetRequested = false;
+          try {
+            const loaded = await api<Snapshot>(`/projects/${encodeURIComponent(project.id)}/snapshot`, { signal: controller.signal });
+            if (controller.signal.aborted) return;
+            if (resetRequested) { dirty = true; continue; }
+            const chosen = chooseSnapshot(current, loaded, project.id, force);
+            if (!chosen || (chosen !== loaded && chosen.cursor !== loaded.cursor)) {
+              setLoadingError('상태 순서를 확인하고 있습니다. 마지막으로 확인된 상태를 유지합니다.');
+              continue;
+            }
+            current = chosen;
+            if (force) gate.reset(chosen.cursor); else gate.advance(chosen.cursor);
+            setSnapshot(chosen);
+            setLastSyncedAt(loaded.syncedAt ?? new Date().toISOString());
+            setLoadingError('');
+            result = chosen;
+          } catch (failure) {
+            if (!controller.signal.aborted) { setLoadingError(errorMessage(failure)); onError(failure); }
+          }
+        } while (dirty && !controller.signal.aborted);
+        return result;
+      })().finally(() => { pending = null; });
+      return pending;
     };
     reloadRef.current = refresh;
     const receive = (message: MessageEvent<string>) => {
       if (controller.signal.aborted) return;
       try {
         const entry = JSON.parse(message.data) as CompanyEvent;
-        const id = message.lastEventId || entry.eventId;
-        if (id && seen.has(id)) return;
-        if (id) { seen.add(id); if (seen.size > 500) seen.delete(seen.values().next().value as string); }
+        if (!gate.receive(entry)) return;
         setEvents(current => [{ ...entry, type: entry.type ?? message.type }, ...current].slice(0, 20));
         setRefreshKey(current => current + 1);
         void refresh();
@@ -280,30 +305,40 @@ function ProjectWorkspace({ project, session, onError }: { project: Project; ses
         if (controller.signal.aborted) return;
         setConnection("서버 상태 복원 중");
         setEvents([]);
-        seen.clear();
         setRefreshKey(current => current + 1);
-        void refresh().then(loaded => {
-          if (!controller.signal.aborted && loaded) connect(loaded.cursor);
-        });
+        const restore = () => { void refresh(true).then(loaded => {
+          if (controller.signal.aborted) return;
+          if (loaded) connect(loaded.cursor);
+          else recoveryTimer = window.setTimeout(restore, 2000);
+        }); };
+        restore();
+      });
+      connected.addEventListener('stream.cursor', (message) => {
+        try { gate.advance(JSON.parse((message as MessageEvent<string>).data).sequence); } catch { /* A snapshot will re-establish the cursor. */ }
       });
     };
-    void (async () => {
-      try {
-        const initial = await api<Snapshot>(`/projects/${encodeURIComponent(project.id)}/snapshot`, { signal: controller.signal });
-        if (controller.signal.aborted) return;
-        setSnapshot(initial);
-        connect(initial.cursor);
-      } catch (failure) {
-        if (!controller.signal.aborted) { setConnection("연결할 수 없음"); setLoadingError(errorMessage(failure)); onError(failure); }
-      }
-    })();
-    return () => { controller.abort(); stream?.close(); reloadRef.current = null; };
+    void refresh(true).then(initial => {
+      if (controller.signal.aborted) return;
+      if (initial) { if (!stream) connect(initial.cursor); } else setConnection('연결할 수 없음');
+    });
+    const visible = () => {
+      if (!document.hidden) void refresh().then(loaded => {
+        if (!controller.signal.aborted && loaded && !stream) connect(loaded.cursor);
+      });
+    };
+    document.addEventListener('visibilitychange', visible);
+    const poll = window.setInterval(visible, 10000);
+    return () => { controller.abort(); stream?.close(); window.clearTimeout(recoveryTimer); window.clearInterval(poll); document.removeEventListener('visibilitychange', visible); reloadRef.current = null; };
   }, [project.id, onError]);
 
   const tasks = snapshot?.tasks ?? [];
   const activeTask = tasks.find(task => task.id === selectedTaskId);
 
   return <>
+    <PixelOffice projectId={project.id} agents={snapshot?.agents} connection={loadingError ? '상태 확인 중' : connection} syncedAt={lastSyncedAt} onOpenTask={id => {
+      setSelectedTaskId(id);
+      window.requestAnimationFrame(() => document.querySelector('.task-detail')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
+    }} />
     <section className="summary-grid" aria-label="프로젝트 현황">
       <SummaryCard label="등록된 업무" value={snapshot ? String(tasks.length) : "—"} suffix="건" caption="서버에 저장된 전체 업무" />
       <SummaryCard label="직원 실행 방식" value="Codex" caption="PM → Developer → QA · 순차 실행" subdued />

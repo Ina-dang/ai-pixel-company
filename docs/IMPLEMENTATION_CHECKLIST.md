@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-Phase 0 기반과 Phase 1 구독 전용 제한 fixture 경로를 구현했다. 실제 Codex PM/Developer/QA, 파일 수정·Docker test/build·동일 SHA QA를 확인했다. 자동 시험69개·Chromium5개와 TS16/Python26 계약 fixture를 검증한다. 세부 실제 결과·한계·실행 명령은 README를 따른다. 언어 비교/범용 저장소는 미실행이다. 외부 App 설치/메시지·merge·운영 배포·API 키 호출은 수행하지 않았다.
+Phase 0 기반, Phase 1 구독 전용 제한 fixture 경로와 Phase 2 픽셀 사무실을 구현했다. 실제 Codex PM/Developer/QA, 파일 수정·Docker test/build·동일 SHA QA와 서버 상태 기반 사무실 연동을 확인했다. 자동 시험97개·Chromium12개와 TS16/Python26 계약 fixture를 검증한다. 세부 실제 결과·한계·실행 명령은 README를 따른다. 언어 비교/범용 저장소는 미실행이다. 외부 App 설치/메시지·merge·운영 배포·API 키 호출은 수행하지 않았다.
 
 ## Phase 0 — Foundation
 
@@ -39,11 +39,11 @@ Phase 0 기반과 Phase 1 구독 전용 제한 fixture 경로를 구현했다. �
 
 ## Phase 2 — Pixel Office / B 출시
 
-- [ ] P2-01 Phaser 3/Tiled JSON·자산 license·client-only scene lifecycle.
-- [ ] P2-02 대표/개발/회의/QA/공용 공간·3명 캐릭터·한국어 말풍선.
-- [ ] P2-03 실제 이벤트 상태/행동·동시 표시·직원 상세·DOM fallback(T13).
-- [ ] P2-04 snapshot/replay·중복/역순/reload/단절/권한 철회(T05/T13).
-- [ ] P2-05 animation/실행 독립성·B gate 통합 검증.
+- [x] P2-01 Phaser3.90.0/MIT·Tiled JSON·직접 제작 CC0 자산·client-only 생성/정리·재시도/단일 canvas.
+- [x] P2-02 대표/개발/회의/QA/공용 공간·3명·한국어 말풍선·충돌 회피. 상호작용 지점64개 경로 검사.
+- [x] P2-03 실제 서버 실행/완료 근거 투영·동시 직원·상세·키보드/390px DOM fallback(T13).
+- [x] P2-04 원자 snapshot/SSE·중복/역순/reload/reset·단절/권한 철회(T05/T13). PG19·동기화 단위8·사무실 브라우저7개 통과.
+- [ ] P2-05 animation/실행 독립성은 브라우저에서 검증했다(그래픽 off·탭 비활성·reduce motion·쓰기 요청0). 전체 B 출시 gate는 언어 비교·범용 저장소 등 잔여 범위 때문에 미완료다. Phase 2 로컬 사무실 검증과 운영 출시를 구분한다.
 
 ## Phase 3 — Collaboration & Recruitment
 
@@ -114,4 +114,4 @@ Critical(현재 설계 착수를 막는 문서 결함)은 자체 검토에서 �
 
 **Phase 0 완료**. 2026-10-19 실제 테스트·브라우저 검증으로 기반 gate를 통과했다. D07의 Phase0 버전/설치 불확실성은 ADR-010으로 해소했다. D06(Sandbox 실차단)은 Phase1의 실행 차단 조건으로 유지한다. Phase1은 provider/예산·격리 검증을 전제로 CONDITIONAL GO다.
 
-현재 이력 보충(2026-10-19): 위 최초 착수 경로는 ADR-011로 대체했다. 구독/PG checkpoint/lease/제한 Sandbox/PM·Dev·QA 핵심 검증을 완료했다. 다음 우선순위는 실제 결과 Owner 수락, 언어 비교 실험의 필요성 판단, 범용 저장소 격리·의존성 정책, Phase 2 픽셀 사무실이다. 운영 배포와 merge는 별도 승인한다.
+현재 이력 보충(2026-10-19): 위 최초 착수 경로는 ADR-011로 대체했다. 구독/PG checkpoint/lease/제한 Sandbox/PM·Dev·QA 핵심 검증을 완료했고 Phase 1 최종 결과를 사용자 지시로 수락했다. Phase 2 사무실과 실제 Codex→브라우저 상태 연동도 검증했다(README의 run/SHA 근거). 다음 우선순위는 새 검증 결과의 Owner 검토, 언어 비교 실험의 필요성 판단, 범용 저장소 격리·의존성 정책 및 Phase 3 범위 결정이다. 운영 배포와 merge는 별도 승인한다.

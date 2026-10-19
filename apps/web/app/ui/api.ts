@@ -1,3 +1,5 @@
+import type { OfficeAgent } from '@ai-pixel/contracts';
+
 export type Session = {
   user: { id: string; displayName: string };
   organization: { id: string; name: string };
@@ -39,14 +41,17 @@ export type CompanyEvent = {
   sequence: string;
   timestamp: string;
   payload: Record<string, unknown>;
+  projectId?: string | null;
+  aggregateVersion?: number;
 };
 
 export type Snapshot = {
   projectId: string;
   cursor: string;
   tasks: Task[];
-  agents: unknown[];
+  agents: OfficeAgent[];
   approvals: unknown[];
+  syncedAt?: string;
 };
 
 export type TaskDetail = Task & { events: CompanyEvent[] };
@@ -63,7 +68,7 @@ export type SubscriptionState = {
 export type RoleEvidence = {
   role: "PM" | "DEVELOPER" | "QA";
   threadId: string;
-  turnId: string;
+  turnId: string | null;
   candidateSha: string | null;
   completedAt: string;
   usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number };

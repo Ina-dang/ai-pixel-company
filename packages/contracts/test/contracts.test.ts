@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { createProjectSchema, createTaskSchema, eventEnvelopeSchema, executionContractSchema, patchTaskSchema, sequenceSchema, sessionResponseSchema, taskStatuses } from "../src/index.js";
+import { createProjectSchema, createTaskSchema, eventEnvelopeSchema, executionContractSchema, patchTaskSchema, sequenceSchema, sessionResponseSchema, snapshotSchema, taskStatuses } from "../src/index.js";
 
-const fixtures = JSON.parse(readFileSync(new URL("../fixtures/contracts.json", import.meta.url), "utf8")) as { event: Record<string, unknown>; execution: Record<string, unknown> };
+const fixtures = JSON.parse(readFileSync(new URL("../fixtures/contracts.json", import.meta.url), "utf8")) as { event: Record<string, unknown>; execution: Record<string, unknown>; snapshot: Record<string, unknown> };
 const criterion = { id: "AC-1", descriptionKo: "새로고침 후 원문이 유지된다", method: "integration-test", required: true };
 describe("Phase 0 public contracts", () => {
+  it("requires three distinct office roles and a synchronization timestamp", () => {
+    const snapshot = snapshotSchema.parse(fixtures.snapshot);
+    expect(snapshot.agents.map((agent) => agent.role)).toEqual(["PM", "DEVELOPER", "QA"]);
+    expect(snapshotSchema.safeParse({ ...snapshot, agents: [] }).success).toBe(false);
+    expect(snapshotSchema.safeParse({ ...snapshot, agents: Array(3).fill(snapshot.agents[0]) }).success).toBe(false);
+    expect(snapshotSchema.safeParse({ ...snapshot, syncedAt: undefined }).success).toBe(false);
+    expect(snapshotSchema.safeParse({ ...snapshot, agents: [{ ...snapshot.agents[0], id: "QA" }, ...snapshot.agents.slice(1)] }).success).toBe(false);
+  });
   it("validates the API's nested session user and organization response", () => {
     const session = {
       user: { id: "22222222-2222-4222-8222-222222222222", displayName: "헴" },

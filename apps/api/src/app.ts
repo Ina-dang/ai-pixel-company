@@ -22,6 +22,7 @@ import {
   checkOrigin, csrfToken, digest, randomToken,
 } from './security.js';
 import { workflowRoutes } from './workflow-routes.js';
+import { loadOfficeApprovals, projectOffice } from './office.js';
 
 export { initializeOwner, transitionTaskForVerification } from './repository.js';
 export type { ApiConfig } from './security.js';
@@ -104,7 +105,7 @@ export function createApp({ database, config, workflowProvider }: { database: Da
   app.notFound((c) => c.json({ error: { code: 'NOT_FOUND', messageKo: '경로를 찾을 수 없습니다.', retryable: false }, requestId: c.get('requestId') }, 404));
   app.get('/health', async (c) => {
     await database.sql`select 1`;
-    return c.json({ status: 'ok', phase: workflowProvider ? 1 : 0,
+    return c.json({ status: 'ok', phase: 2,
       agentWorkerConfigured: Boolean(workflowProvider), subscriptionReadiness: '/api/v1/subscription' });
   });
 
@@ -274,7 +275,10 @@ export function createApp({ database, config, workflowProvider }: { database: Da
       if (!project.length) throw new ApiError(404, 'NOT_FOUND', '프로젝트를 찾을 수 없습니다.');
       const rows = await tx<TaskRow[]>`select * from tasks where project_id=${projectId} and organization_id=${org} order by created_at desc,id desc`;
       const counters = await tx<{ last_sequence: string }[]>`select last_sequence from organization_event_counters where organization_id=${org}`;
-      return { projectId, cursor: String(counters[0]?.last_sequence ?? '0'), tasks: rows.map(taskView), agents: [], approvals: [] };
+      const agents = await projectOffice(tx, org, projectId);
+      const approvals = await loadOfficeApprovals(tx, org, projectId);
+      const time = await tx<{ synced_at: Date }[]>`select transaction_timestamp() as synced_at`;
+      return { projectId, cursor: String(counters[0]?.last_sequence ?? '0'), tasks: rows.map(taskView), agents, approvals, syncedAt: time[0].synced_at.toISOString() };
     });
     return c.json({ data: snapshot, requestId: c.get('requestId') });
   });

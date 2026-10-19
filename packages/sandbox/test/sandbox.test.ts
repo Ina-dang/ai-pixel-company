@@ -72,6 +72,8 @@ describe('real Docker verification (required, never silently skipped)', () => {
     const failing = await worker.verify(runId);
     expect(failing.test.exitCode).not.toBe(0);
     expect(failing.build.exitCode).toBe(0);
+    expect(failing.test.command).toEqual(['node', '--test', 'test/math.test.mjs']);
+    expect(failing.build.command).toEqual(['node', 'build.mjs']);
     const candidate = await worker.apply(runId, [{ path: 'src/math.mjs', content: 'export const add = (a, b) => a + b;\nexport const sum = (values) => values.reduce(add, 0);\n' }]);
     const passing = await worker.verify(runId);
     expect(passing.sha).toBe(candidate.sha);

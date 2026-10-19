@@ -12,7 +12,7 @@ export const taskPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 export const commandSources = ["TEXT", "VOICE", "SLACK"] as const;
 export const taskStatusSchema = z.enum(taskStatuses);
 export const taskPrioritySchema = z.enum(taskPriorities);
-export const sequenceSchema = z.string().regex(/^(0|[1-9][0-9]*)$/).max(19).refine((value) => BigInt(value) <= 9223372036854775807n, "Sequence exceeds PostgreSQL bigint").meta({ "x-bigint-max": "9223372036854775807" });
+export const sequenceSchema = z.string().regex(/^(0|[1-9][0-9]*)$/).max(19).refine((value) => /^\d{1,19}$/.test(value) && BigInt(value) <= 9223372036854775807n, "Sequence exceeds PostgreSQL bigint").meta({ "x-bigint-max": "9223372036854775807" });
 export const idSchema = z.uuid();
 const versionSchema = z.number().int().min(1).max(2147483647);
 const dateSchema = z.iso.datetime({ offset: true });
@@ -74,8 +74,26 @@ export const eventEnvelopeSchema = z.strictObject({
   timestamp: dateSchema, type: z.enum(eventTypes), aggregateVersion: versionSchema,
   payload: z.record(z.string(), z.unknown()),
 });
+export const officeRoles = ["PM", "DEVELOPER", "QA"] as const;
+export const officeAgentSchema = z.strictObject({
+  id: z.enum(officeRoles), role: z.enum(officeRoles), nameKo: z.string(),
+  state: z.enum(["IDLE", "RUNNING", "WAITING", "REVIEWING", "BLOCKED", "ERROR"]), activityKo: z.string(),
+  location: z.enum(["pmDesk", "developerDesk", "qaDesk", "owner", "lounge", "meeting"]),
+  taskId: idSchema.nullable(), taskTitle: z.string().nullable(), taskStatus: taskStatusSchema.nullable(), runId: idSchema.nullable(),
+  runStatus: z.enum(["QUEUED", "RUNNING", "PAUSED", "BLOCKED", "WAITING_APPROVAL", "SUCCEEDED", "FAILED", "CANCELLED"]).nullable(),
+  stage: z.enum(["PM", "DEVELOPER", "VERIFY", "QA"]).nullable(), blockedReason: z.string().nullable(),
+  version: versionSchema, evidenceSha: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/).nullable(), lastCompletedAt: dateSchema.nullable(),
+  usage: z.strictObject({ inputTokens: z.number().int().nonnegative(), cachedInputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative() }).nullable(),
+  activeAssignments: z.number().int().nonnegative(),
+}).refine((agent) => agent.id === agent.role, "Office agent ID must equal its role");
+export const officeApprovalSchema = z.strictObject({
+  id: idSchema, runId: idSchema, taskId: idSchema, candidateSha: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/).nullable(),
+  status: z.literal("WAITING_APPROVAL"), version: versionSchema,
+});
 export const snapshotSchema = z.strictObject({
-  projectId: idSchema, cursor: sequenceSchema, tasks: z.array(taskSchema), agents: z.array(z.unknown()), approvals: z.array(z.unknown()),
+  projectId: idSchema, cursor: sequenceSchema, tasks: z.array(taskSchema),
+  agents: z.array(officeAgentSchema).length(3).refine((agents) => new Set(agents.map((agent) => agent.role)).size === 3, "Office snapshot must contain each role once"),
+  approvals: z.array(officeApprovalSchema), syncedAt: dateSchema,
 });
 export const errorResponseSchema = z.strictObject({
   error: z.strictObject({ code: z.string(), messageKo: z.string(), retryable: z.boolean(), details: z.unknown().optional() }), requestId: z.string(),
@@ -100,6 +118,8 @@ export type Project = z.infer<typeof projectSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type EventEnvelope = z.infer<typeof eventEnvelopeSchema>;
 export type Snapshot = z.infer<typeof snapshotSchema>;
+export type OfficeAgent = z.infer<typeof officeAgentSchema>;
+export type OfficeApproval = z.infer<typeof officeApprovalSchema>;
 export type SessionUser = z.infer<typeof sessionUserSchema>;
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 export type ExecutionContract = z.infer<typeof executionContractSchema>;

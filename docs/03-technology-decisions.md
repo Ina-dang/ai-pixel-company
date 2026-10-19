@@ -1,5 +1,13 @@
 # 기술 검증과 선택
 
+## Phase 2 실제 조합 — 2026-10-19
+
+기존 Next16.4.2/React19.3.1 조합에 Phaser3.90.0을 정확히 고정했다. 공식 Phaser3 버전 문서와 설치 package의 MIT license를 확인했다. Phaser 기본 문서는 4 계열이므로 이 구현의 근거는 3.90.0 문서다. `import * as Phaser`와 브라우저 effect의 동적 import로 실제 프로덕션 빌드를 검증했다. 서버 렌더링에서 Phaser를 실행하지 않는다.
+
+896×512 논리 좌표·32px 타일의 로컬 Tiled JSON과 직접 제작 CC0-1.0 절차적 픽셀 자산을 사용한다. 외부 자산/폰트/CDN 요청은 없다. Canvas 렌더러·30fps 목표·페이지 비활성/모션 감소 시 일시정지·DOM 대체 목록을 적용했다. 30fps는 설정 목표이며 모든 기기 성능을 보증하는 측정값은 아니다.
+
+공식 확인 경로(열람 2026-10-19, 페이지 변경일 미공개): [Phaser3.90 Tilemap](https://docs.phaser.io/api-documentation/3.90.0/class/tilemaps-tilemap), [Phaser3.90 Game](https://docs.phaser.io/api-documentation/3.90.0/class/game), [Tiled JSON](https://doc.mapeditor.org/en/stable/reference/json-map-format/).
+
 ## Phase 1 검증 업데이트 — 2026-10-19
 
 기존 npm 설치 Codex CLI0.162.1의 ChatGPT 인증·app-server account/rateLimits 조회·exec JSON/구조화 출력·엄격 설정을 실제 검증했다. 셸/앱/플러그인/이미지/브라우저/다중 에이전트 도구를 비활성화하고 모델 결과 파일은 별도 broker가 반영한다. 최신 문서의 일부 키(tools.view_image)가 이 버전에서 미인식되어 features.view_image=false로 수정하고 strict-config로 조용한 무시를 막았다. 공식 설정/프로토콜은 변경될 수 있으므로 CLI 갱신 시 재검증한다.

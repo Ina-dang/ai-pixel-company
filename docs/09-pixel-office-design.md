@@ -1,5 +1,15 @@
 # 픽셀 사무실 설계
 
+## Phase 2 실제 구현 — 2026-10-19
+
+Phaser3.90.0 client-only Canvas renderer·896×512/32px Tiled JSON·3직원·5공간을 구현했다. 기본 목표30fps, reduced-motion과 탭 비활성/연결 단절에서는 움직임을 멈춘다. 타일·3역할×7동작 sprite atlas는 직접 작성한 procedural pixel art이며 CC0-1.0이다. 외부 이미지/폰트는 사용하지 않는다. 원본/라이선스는 office-map.json properties와 office-art.ts에 기록한다. Phaser 의존성은 MIT다. 기존 지정 Phaser3를 유지하며 최신 기본 문서의 Phaser4 API와 구분해 버전 문서/실제 빌드를 검증했다.
+
+API snapshot은 동일 repeatable-read/조직 cursor에서 정확히 PM/DEVELOPER/QA 3명 및 실제 pending approval을 조회한다. 역할별 활성 실행을 우선하고 완료된 역할은 실제 evidence 완료 시각으로 선택한다. 과거 결과의 늦은 Owner 수락이 최신 QA를 덮지 않도록 회귀 검증한다. 전체 활성 배정 수는 조회 cap으로 잘리지 않는다. 테스트·빌드 VERIFY와 QA 단계는 QA REVIEWING이지만 구체 단계는 상세에서 구분한다. task/run/직원 상태는 각각 표시한다.
+
+브라우저는 서버 snapshot만 투영한다. SSE event ID·조직 cursor·동일 실행 version을 검사하고 요청을 직렬화/병합한다. 초기 snapshot 실패도 재조회 후 SSE를 복구한다. 명시적 stream.reset은 새 snapshot/cursor로 시작한다. 그래픽 실패 시 키보드 가능한 직원 목록·상세를 유지하며, 직원 선택이 승인을 수행하지 않는다. 390px에서는 지도를 축소하고 동일 정보는 DOM으로 읽는다. 그래픽 해제·권한 철회·project 전환 시 장면을 정리한다.
+
+검증: 실제 PG projection19개·브라우저 사무실7개·순서/맵 단위8개. 모든 안정 interaction point 사이 경로64개를 collision grid에서 확인했다. 정확한 전체 검사/실제 모델 연동 결과는 README를 따른다. 원래 전체 확장 설계는 아래에 보존한다.
+
 ## 1. 목적
 
 AI 직원의 실제 실행 상태를 읽기 쉬운 픽셀 공간으로 표현한다. 표현 엔진의 동작이 실제 실행 성공을 결정하지 않는다.

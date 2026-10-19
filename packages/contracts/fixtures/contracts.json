@@ -10,6 +10,14 @@
     "profileRefs": ["profile:pm:1"],
     "policyRef": "policy:fixture:1"
   },
+  "snapshot": {
+    "projectId": "20000000-0000-4000-8000-000000000002", "cursor": "0", "tasks": [], "approvals": [], "syncedAt": "2026-10-19T00:00:00.000Z",
+    "agents": [
+      { "id": "PM", "role": "PM", "nameKo": "PM", "state": "IDLE", "activityKo": "할당된 작업을 기다려요.", "location": "lounge", "taskId": null, "taskTitle": null, "taskStatus": null, "runId": null, "runStatus": null, "stage": null, "blockedReason": null, "version": 1, "evidenceSha": null, "lastCompletedAt": null, "usage": null, "activeAssignments": 0 },
+      { "id": "DEVELOPER", "role": "DEVELOPER", "nameKo": "개발자", "state": "IDLE", "activityKo": "할당된 작업을 기다려요.", "location": "lounge", "taskId": null, "taskTitle": null, "taskStatus": null, "runId": null, "runStatus": null, "stage": null, "blockedReason": null, "version": 1, "evidenceSha": null, "lastCompletedAt": null, "usage": null, "activeAssignments": 0 },
+      { "id": "QA", "role": "QA", "nameKo": "QA", "state": "IDLE", "activityKo": "할당된 작업을 기다려요.", "location": "lounge", "taskId": null, "taskTitle": null, "taskStatus": null, "runId": null, "runStatus": null, "stage": null, "blockedReason": null, "version": 1, "evidenceSha": null, "lastCompletedAt": null, "usage": null, "activeAssignments": 0 }
+    ]
+  },
   "event": {
     "schemaVersion": 1,
     "eventId": "20000000-0000-4000-8000-000000000001",

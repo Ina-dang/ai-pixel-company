@@ -21,6 +21,7 @@
     "build": "turbo run build",
     "verify:contracts": "pnpm --filter @ai-pixel/contracts contracts:check",
     "verify:agents": "tsx scripts/phase1-smoke.ts",
+    "verify:office-live": "tsx scripts/phase2-smoke.ts",
     "verify": "pnpm lint && pnpm typecheck && pnpm verify:contracts && pnpm test && pnpm build"
   },
   "devDependencies": {
