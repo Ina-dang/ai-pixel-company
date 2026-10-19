@@ -1,5 +1,20 @@
 # API 계약
 
+## P4-05/06 실제 운영 API — 2026-10-20
+
+`GET /health/live`는 process 가용성, `GET /health/ready`와 기존 `/health`는 DB·점검/격리 상태를 구분한다. 외부에 상세 자격 증명/의존성 오류를 노출하지 않는다. 아래 `/api/v1` 경로는 기존 Owner 세션을 요구하고 모든 POST는 Origin/CSRF/Idempotency-Key를 검사한다.
+
+| 경로 | 실제 계약 |
+|---|---|
+| GET `/operations` | 신선도/계측·경보/불변 event·정책/outbox·백업/job·로컬/운영 C 판정. 최근 alerts/events100·jobs/backups20·notification50 |
+| POST `/operations/control` | `{paused,expectedVersion,originalKo}`. 신규 실행 점검이며 진행 중 즉시 종료가 아님. 백업 token/RESTORE_QUARANTINE 재개 불가 |
+| POST `/operations/alerts/:id/acknowledge` | `{expectedVersion,originalKo}`. 확인 기록만 추가하며 해결로 바꾸지 않음 |
+| POST `/operations/notifications` | `{enabled,projectId,expectedVersion}`. 같은 조직/프로젝트의 기존 enabled Slack 연결만 고정 |
+| POST `/operations/drill` | `{action:OPEN|RESOLVE}`. synthetic 표시된 알림 시험, 장애 사실/업무·merge 실행과 구분 |
+| POST `/operations/jobs` | `{kind:BACKUP|RESTORE_VERIFY,backupId?}` →202. 실행 직전 요청 Owner/session 재검사. active/UNKNOWN job 중복 차단 |
+
+호스트 제어/전체 DB 백업은 현재 단일 조직 설치만 허용한다. UUID 이외의 파일/DB/컨테이너/명령 인자를 받지 않는다. restore는 원본 교체 API가 아니며 격리 시험만 한다. C 판정은 GET/read-only이며 `/operations/release`에 임의 PASS를 제출할 수 없다. 사용 범위와 운영 NO_GO 사유는 15장·README를 따른다.
+
 ## Phase 4 실제 API — 2026-10-19
 
 모든 경로는 `/api/v1` 아래이며 Owner 세션·조직 경계를 적용한다. 변경은 Origin/CSRF/Idempotency-Key와 대상 version을 검사한다. 프로젝트 경로는 같은 조직의 project/run/task/staffing 근거를 요구한다. 새 관리자 역할이나 프로젝트 간 비밀 공유는 추가하지 않는다.

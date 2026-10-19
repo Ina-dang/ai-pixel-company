@@ -23,6 +23,9 @@ const view=(r:ReviewRow)=>({id:r.id,projectId:r.project_id,taskId:r.task_id,runI
 async function body<T>(request:Request,schema:z.ZodType<T>){const parsed=schema.safeParse(await request.json().catch(()=>null));if(!parsed.success)throw new ApiError(400,'INVALID_INPUT','평가 입력과 버전을 확인하세요.');return parsed.data;}
 
 export class ReviewService {
+  private lastTickAt:string|null=null;
+  private lastErrorAt:string|null=null;
+  health(){return{running:!!this.timer,busy:this.busy,lastTickAt:this.lastTickAt,lastErrorAt:this.lastErrorAt};}
   private timer:ReturnType<typeof setInterval>|null=null;
   private busy=false;
   private active:AbortController|null=null;
@@ -158,9 +161,9 @@ export class ReviewService {
   }
   async start(){
     await this.database.sql`update performance_review_jobs set status='UNKNOWN',error_code='PROCESS_RESTART_UNVERIFIABLE',updated_at=now() where status='RUNNING'`;
-    this.timer=setInterval(()=>{void this.processOnce().catch(()=>undefined);},1000);
+    this.timer=setInterval(()=>{this.lastTickAt=new Date().toISOString();void this.processOnce().catch(()=>{this.lastErrorAt=new Date().toISOString();});},1000);
   }
-  async stop(){if(this.timer)clearInterval(this.timer);this.active?.abort();while(this.busy)await new Promise(done=>setTimeout(done,25));}
+  async stop(){if(this.timer)clearInterval(this.timer);this.timer=null;this.active?.abort();while(this.busy)await new Promise(done=>setTimeout(done,25));}
   private async authority(job:Job){
     return this.database.sql.begin(async tx=>{
       await lockOrganization(tx,job.organization_id);await requireProject(tx,job.organization_id,job.project_id,true);

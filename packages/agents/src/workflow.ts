@@ -8,15 +8,19 @@ export class WorkflowRunner {
   private busy = false;
   private active: AbortController | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private lastTickAt:string|null=null;
+  private lastErrorAt:string|null=null;
+  health(){return{running:this.timer!==null&&!this.stopped,busy:this.busy,lastTickAt:this.lastTickAt,lastErrorAt:this.lastErrorAt};}
   constructor(private store: WorkflowStore, private provider: AgentProvider, private sandbox: CodeSandbox) {}
 
   async start() {
     await this.store.recover();
-    this.timer = setInterval(() => { void this.tick().catch(() => undefined); }, 1000);
+    this.timer = setInterval(() => {this.lastTickAt=new Date().toISOString();void this.tick().catch(() => {this.lastErrorAt=new Date().toISOString();}); }, 1000);
   }
   async stop() {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
+    this.timer=null;
     this.active?.abort();
     while (this.busy) await new Promise(resolveWait => setTimeout(resolveWait, 25));
     await this.provider.close();
@@ -32,6 +36,7 @@ export class WorkflowRunner {
     const controller = new AbortController();
     this.active = controller;
     try {
+      await this.store.recover();
       run = await this.store.claim();
       if (!run?.leaseToken) return false;
       const lease = run.leaseToken;

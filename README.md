@@ -1,10 +1,10 @@
 # AI Pixel Company
 
-최신성 체크: 2026-10-19 공식 문서·패키지 레지스트리·로컬 실행 검증 기준. 열람일과 개별 문서 변경일은 구분한다.
+최신성 체크: 2026-10-20 실제 로컬 운영·복원·브라우저 검증 기준. 버전/공식 계약과 과거 Phase 검증의 날짜는 각 항목에서 구분한다.
 
 자연어 업무 지시를 PM·Developer·QA AI의 실제 개발 작업으로 연결하고, 검증된 실행 상태를 픽셀 사무실에 표시하는 AI 회사 운영 플랫폼이다.
 
-**현재 상태: Phase 0 기반·Phase 1 구독 실행·Phase 2 사무실·Phase 3 채용/협업에 이어 Phase 4 직원 평가 5유형·부서 이력·다중 프로젝트 토큰 정책/DAG/명시 예약을 구현했다. 실제 Codex 프로젝트 2개의 PM/Developer/QA와 AI 평가 3회를 검증했다. 실제 merge·운영 배포는 미수행이며 운영 경보/backup restore/C 출시 gate는 남았다. 코드 실행은 제한된 Node 함수 fixture를 지원한다.**
+**현재 상태: Phase 4 직원 평가·다중 프로젝트에 이어 로컬 운영 계측/경보·고정 Slack 알림·암호화 백업·격리 복원·C 판정을 구현했다. 로컬 제한 fixture는 READY_FOR_OWNER_REVIEW, 운영 C는 NO_GO다. 실제 merge·운영 배포는 미수행이다. 코드 실행은 제한된 Node 함수 fixture이며 off-host 복구·운영 환경/권한 분리·상시 ingress·범용 저장소/언어 검증은 남았다.**
 
 - B단계: Phase 0 기반 → Phase 1 실제 AI 실행 → Phase 2 픽셀 사무실.
 - C단계: Phase 3 GitHub·Slack·채용 → Phase 4 평가·다중 프로젝트·운영.
@@ -70,22 +70,22 @@ GitHub App의 저장소 범위와 Slack의 workspace/channel/Owner 매핑은 서
 
 원격 작업은 실제 test/build0·동일 후보 QA PASS 뒤에만 요청하며 DB 작업 기록과 현재 connection/run/project version을 검사한다. 후보 manifest SHA256과 원격 Git commit SHA는 구분한다. 불명확한 원격 효과는 UNKNOWN으로 남겨 자동 재전송을 막고, 기존 외부 operation의 429는 제한된 횟수와 Retry-After를 따른다. merge는 별도 범위 승인과 명시적 실행 요청을 요구하며 Slack 명령은 TODO 등록/상태/도움말만 지원한다. Slack interactive 승인과 자동 업무 실행은 제공하지 않는다.
 
-## 실제 검증 결과 — 2026-10-19
+## 실제 검증 결과 — 2026-10-20 (과거 실행은 항목별 기록)
 
 | 검사 | 결과 |
 |---|---|
 | `pnpm lint` | 통과, 오류·경고 없음 |
 | `pnpm typecheck` | 7개 workspace 및 테스트/스크립트 통과 |
-| `pnpm test` | 188개 = Phase 3 158 + Phase 4 30. 실제 PostgreSQL·제어된 공급자 시험과 실제 Codex opt-in 검증을 구분 |
+| `pnpm test` | 206개 = Phase 3 158 + Phase 4 핵심30 + 운영18. 실제 PostgreSQL·제어된 공급자 시험과 실제 opt-in 연동을 구분 |
 | `pnpm verify:contracts` | TypeScript fixture 16개·Python JSON Schema fixture 26개 통과 |
 | `pnpm build` | Next 프로덕션 빌드·API/공유 패키지 타입 빌드 통과 |
-| `pnpm test:e2e` | Chromium25개 = 기존20 + Phase 4 5. 프로젝트 전환/명시 예약·정책/DAG 거부·5유형/null·게시/생성 제한·한국어 escaping·390px/키보드 |
+| `pnpm test:e2e` | Chromium30개 = 이전25 + 운영5. 경보 확인/회복 구분·별도 백업/복원 동의·알림 정책·stale/격리·390px/키보드와 전체 회귀 |
 | `pnpm verify:agents` | Phase 1 실제 구독 PM/Developer/QA, 코드·추가 테스트 파일 수정, test/build exit0, QA PASS. 저장된 실행 수동 재개 성공, 아래 최종 결과는 사용자 지시로 수락 |
 | `pnpm verify:office-live` | 실제 Codex→브라우저 PM 작업/Developer 작업/QA 검토 관측, 동일 SHA test/build0·QA PASS, reload/390px·page error0. 새 결과는 수락 대기 |
 | `pnpm verify:staffing-live` | 실제 신규 Developer 채용/배정·Codex 코드 수정·Docker test/build0·동일 SHA QA PASS, 이름/reload/390px/page error0 확인. Owner 수락 대기 |
 | `pnpm verify:integrations-live` | 실제 GitHub App JWT/제한 installation token의 시험 저장소·fixture-base head 및 Slack auth.test의 내손비 team/bot identity 조회 성공 |
 | `pnpm verify:github-live <projectId> <runId>` | 시험 저장소만 허용하는 opt-in 외부 쓰기. Issue1개·작업 branch/push·draft PR1개·현재 head 로컬 검사 상태 PASS 확인. 모델/merge/Actions 실행 없음 |
-| `pnpm audit` | 검사 시점 패키지 취약점 보고 0개. 런타임 전체 안전성 보장은 아님 |
+| `pnpm audit` (2026-10-19) | 당시 패키지 취약점 보고 0개. 이번 변경은 의존성을 추가하지 않았으며 2026-10-20 재audit/런타임 전체 안전성 검증으로 간주하지 않음 |
 | DB 컨테이너 재시작 | 프로젝트 2개·업무 4개·이벤트 cursor 6 유지 확인 |
 | Python HTTP 가용성 | stdlib 임시 loopback 서버 HTTP 200. LangGraph 실행 시험과 다름 |
 
@@ -149,7 +149,7 @@ GitHub 실제 webhook 시험은 초기 ping의 403을 확인한 뒤 수정했다
 
 ## 구현 범위 판정
 
-**Phase 0 기반 / Phase 1 제한 fixture 핵심 경로 / Phase 2 사무실 / Phase 3 협업 / Phase 4 P4-01~04 직원 평가·다중 프로젝트**. 일반 CI webhook 원격 역순/철회·상시 ingress·범용 저장소·언어 비교와 P4-05/06 운영 경보/backup restore/C 출시 gate는 미완료다. 운영 배포·실제 merge·새 유료 자원 생성은 수행하지 않았다. 공식 구독 근거는 [OpenAI 인증](https://learn.chatgpt.com/docs/auth), 그래픽 계약은 [Phaser3.90 Tilemap](https://docs.phaser.io/api-documentation/3.90.0/class/tilemaps-tilemap)·[Tiled JSON](https://doc.mapeditor.org/en/stable/reference/json-map-format/)을 따른다(열람 2026-10-19, 개별 변경일 미공개).
+**Phase 0 기반 / Phase 1 제한 fixture 핵심 경로 / Phase 2 사무실 / Phase 3 협업 / Phase 4 직원 평가·다중 프로젝트·로컬 운영/복원**. 로컬 기술 gate는 통과·Owner 검토 대기다. 운영 C는 off-host 복구·운영 환경/host supervisor 권한 분리·상시 ingress·일반 CI webhook 원격 역순/철회·범용 저장소/언어 비교 등이 남아 NO_GO다. 운영 배포·실제 merge·새 유료 자원 생성은 수행하지 않았다. 공식 구독 근거는 [OpenAI 인증](https://learn.chatgpt.com/docs/auth), 그래픽 계약은 [Phaser3.90 Tilemap](https://docs.phaser.io/api-documentation/3.90.0/class/tilemaps-tilemap)·[Tiled JSON](https://doc.mapeditor.org/en/stable/reference/json-map-format/)을 따른다(열람2026-10-19, 개별 변경일 미공개).
 
 ## Phase 4 직원 평가·다중 프로젝트 — 2026-10-19
 
@@ -172,3 +172,26 @@ GitHub 실제 webhook 시험은 초기 ping의 403을 확인한 뒤 수정했다
 첫 시험 프로젝트 A/B(`3ae9214d-ca5c-41b5-b69c-f8d3f9d70c0b`, `891a9138-d17b-464a-b41d-c595879e9f41`)는 요청의 “실제 Codex 구독”을 PM이 소프트웨어 AC로 확장해 QA가 구독 증거 부족으로 거절했다. test/build0 뒤 재작업은 NO_CODE_CHANGE로 중단됐다. 둘 다 취소·보관했고 이력/사용량을 삭제하지 않았다. 함수 동작 요건으로 좁힌 두 번째 시험은 통과했다. 검증 스크립트의 목록/상세 snapshot 조회 오류도 수정했으며, 이미 완료된 실행으로 평가·브라우저 단계를 재개해 코드 생성을 반복하지 않았다. 위 211,487은 성공 프로젝트 소계이며 첫 실패 시험 사용량을 제외한 값이다.
 
 새 실제 실행은 `pnpm verify:company-live`로 명시 실행한다. 기본 테스트는 모델을 호출하지 않는다. `--review-existing <projectA> <projectB> <runA> <runB> <childTask>`는 이 스크립트가 만든 WAITING_APPROVAL fixture만 재조회하며 이미 있는 5종 평가를 재생성하지 않는다. 이 명령도 결과 수락·게시·merge를 수행하지 않는다.
+
+## P4-05/06 로컬 운영·복원·C 판정 — 2026-10-20
+
+`운영·복구` 탭은 신선한 계측/경보·Owner 확인·고정 Slack 정책·암호화 백업/격리 복원 job·C 검증 근거를 보여준다. 확인과 해결, queued와 성공, 완료 토큰과 미확정 예약을 분리한다. 새 경보/회복만 전송하며 UNKNOWN은 자동 반복하지 않는다. 로컬 Owner/CSRF/version/idempotency·단일 조직 설치 범위를 적용한다. 운영 절차·키 보관·한계는 [15장](docs/15-deployment-and-operations.md), 결정은 ADR-015를 따른다.
+
+| 실제 검사 | 결과·근거 |
+|---|---|
+| 전체 회귀 | lint/typecheck·TS16/Python26 계약·테스트206개·build 통과; Chromium30개 통과 |
+| 암호화 백업 | job `42a0d2b5-54f5-4008-a7b2-4422e8c5d442`, 449,791 bytes, table44/workspace14, 파일 SHA256 `1b953fadd0b5e0d8610cbdbecb249a4d38bbc54630cda12d5e9ee09252de2363` |
+| 최종 격리 복원 | job `f2b28f0e-a26e-4e07-a579-f982415cdfe0`, table44 행 수/digest·workspace14 물리 SHA 일치, quarantine·세션 폐기/연결·예약·이전 승인/전송 차단, 측정6,951ms |
+| 실제 DB 장애 | 복원용 PG만 실제 중단/재시작; live200/ready503 unavailable 확인 후 재접속·quarantine 유지·전체 내용 보존. 원본 PG는 중단/교체하지 않음 |
+| 실제 worker 장애 | 별도 `pixel_recovery_test_*` DB와 native Node worker를 생성해 강제 종료/exit 확인. 늦게 만료된 lease→BLOCKED/RECOVERY_REQUIRED·자동 재호출0·중복 event sequence0. 공급자는 명시적인 비과금 대역이며 실제 Codex 강제 종료 시험과 구분 |
+| 로컬 부하/SSE | 실제 Owner 읽기100회/동시4/p95 11ms/총225ms. p95는 정렬100개 중 `ceil(100×0.95)=95번째`. 3소비자 fanout/느린 소비자5초 종료/연결10 상한은 전용 PG 통합 시험. 운영 SLA 아님 |
+| 실제 외부 연동 | GitHub App repository/base head와 Slack team/bot identity read-only 조회. 내손비 비공개 고정 채널의 synthetic OPEN/RESOLVE 2건 SENT. 시험 뒤 알림 정책을 원래 disabled로 복원 |
+| 알림 안전 경계 | 뒤늦게 대기하던 RESTORE_NOT_VERIFIED 회복1건은 정책 복원 후 NOTIFICATION_PERMISSION_CHANGED/FAILED로 차단됐다. 실제 전송2건과 구분하며 재전송하지 않음 |
+| 실제 화면 | 최종 LOCAL_FIXTURE=READY_FOR_OWNER_REVIEW/blocker0, 운영=NO_GO를 실제 API/화면에서 확인. 키보드·390px·page error0; `test-results/operations-dashboard-desktop.png`, `operations-release-desktop.png`, `operations-release-mobile.png` |
+| 원본·정리 | 기존 workflow 수락 대기6건·성공2건·취소4건·BLOCKED2건 유지, 새 모델 호출0. 시험 소유 컨테이너/네트워크/볼륨/별도 DB 정리. 원본 business 데이터 교체/삭제·실제 merge/운영 배포 없음 |
+
+첫 복원 job `ffc1bba2-f31e-4a6a-b156-258e1effb8e0`은 Docker Desktop 준비 probe3초와 internal network의 host port 부재를 확인해 RESTORE_DATABASE_NOT_READY로 실패했다. 제한 시간을 늘리고 전용 bridge/고정 loopback port를 사용한 뒤 같은 암호화 백업으로 성공했다(`86a0c084-6a71-4040-b62e-6676b31e98bc`, 7,361ms). 이후 최종 C 판정·backoff 가드를 포함한 동일 source digest에서 위 최종 job과 검증을 다시 통과했다. 실패 이력을 삭제하지 않았다.
+
+최종 source digest는 `820287776d0aec10afc35919a004c8cb8639504abf867b449c096b3708adcdfe`다. `AUTOMATED_SUITE` proof `2a1bcab5-0c6f-4199-8fb1-e281c8e1dcf5`, `BROWSER` `93394f97-db62-4e6c-bae5-db41bbc83c5f`, `RECOVERY` `339bcea9-5d47-4899-ba45-8f2b77839736`, `PERFORMANCE` `5ed6604a-43f9-483f-8bb2-d8d02d37ba0a`, `EXTERNAL_PROBE` `19007f4e-0d0f-414b-8e3d-657d15524d19`를 DB와 `.local/operations-evidence/<id>.json`에 연결했다. dump/복원/검증 시간은 이번 소규모 측정값이며 RPO/RTO 약속이 아니다.
+
+로컬 gate는 같은 source digest의 최근 검증5종·실제 백업/복원·실제 경보/회복 전달·신선한 계측/worker·구독/Sandbox·긴급 경보 없음·점검 해제를 요구한다. 운영 C는 Owner 승인·운영 환경/off-host 복구·상시 ingress·범용 실행/언어 비교·native 고아 프로세스 조정·독립 host supervisor 분리가 남아 **NO_GO**다. 새 유료 모델/인프라는 추가하지 않았으며 이 판정은 자동 merge/배포 승인이 아니다.

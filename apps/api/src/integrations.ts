@@ -10,6 +10,7 @@ import { ApiError, type ApiEnv } from './security.js';
 import type { WorkflowRow } from './workflows.js';
 import { parseSlackCommand, SlackCommands, type SlackReceipt } from './slack-commands.js';
 import { IntegrationMerges } from './integration-merges.js';
+import {maintenanceReason} from './maintenance.js';
 
 export type Connection = { id: string; organization_id: string; project_id: string; provider: Provider; config: unknown; secret_refs: Record<string, string>; enabled: boolean; version: number };
 export type Operation = { id: string; connection_id: string; connection_version: number; organization_id: string; project_id: string; provider: Provider; kind: OperationKind; run_id: string; candidate_sha: string;
@@ -47,6 +48,9 @@ export class IntegrationService {
   private secrets: LocalSecretStore;
   private timer: ReturnType<typeof setInterval> | null = null;
   private busy = false;
+  private lastTickAt:string|null=null;
+  private lastErrorAt:string|null=null;
+  health(){return{running:this.timer!==null,busy:this.busy,lastTickAt:this.lastTickAt,lastErrorAt:this.lastErrorAt};}
   private commands: SlackCommands;
   readonly merges: IntegrationMerges;
   constructor(readonly database: Database, readonly root: string, private readonly fetcher: typeof fetch = fetch) {
@@ -58,6 +62,7 @@ export class IntegrationService {
 
   /** Owner-prepared local configuration only. No credential values or browser configuration endpoint. */
   async configureFromLocalFile() {
+    if(await maintenanceReason(this.database.sql))return;
     let content: string;
     try { content = await readFile(resolve(this.root, '.local/integrations.json'), 'utf8'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw new IntegrationError('CONFIGURATION_UNREADABLE', 409); }
@@ -83,6 +88,7 @@ export class IntegrationService {
     }
   }
   private async connection(idValue: string): Promise<Connection> {
+    const paused=await maintenanceReason(this.database.sql);if(paused)throw new IntegrationError(paused,503);
     const rows = await this.database.sql<Connection[]>`select * from integration_connections where id=${idValue}`;
     if (!rows[0]?.enabled) throw new IntegrationError('CONNECTION_UNAVAILABLE', 409);
     return rows[0];
@@ -259,12 +265,13 @@ export class IntegrationService {
     await this.database.sql`update integration_inbox set status='FAILED',error_code='PROCESS_RESTART_RETRY_LIMIT' where status='PROCESSING' and attempts>=3`;
     await this.database.sql`update integration_inbox set reply_status='UNKNOWN',error_code='PROCESS_RESTART_EFFECT_UNKNOWN' where reply_status='SENDING'`;
     await this.merges.recover();
-    this.timer = setInterval(() => { void this.processOnce().catch(() => undefined); }, 1000);
+    this.timer = setInterval(() => {this.lastTickAt=new Date().toISOString();void this.processOnce().catch(() => {this.lastErrorAt=new Date().toISOString();}); }, 1000);
   }
-  async stop() { if (this.timer) clearInterval(this.timer); while (this.busy) await new Promise(done => setTimeout(done, 20)); }
+  async stop() { if (this.timer) clearInterval(this.timer);this.timer=null; while (this.busy) await new Promise(done => setTimeout(done, 20)); }
   async processOnce() {
     if (this.busy) return false; this.busy = true;
     try {
+      if(await maintenanceReason(this.database.sql))return false;
       if (await this.merges.processOnce()) return true;
       if (await this.commands.replyOnce()) return true;
       const candidates = await this.database.sql<Operation[]>`select * from integration_operations where status in ('PENDING','DEFERRED') and attempts<3 and next_attempt_at<=now() order by created_at,id limit 1`;

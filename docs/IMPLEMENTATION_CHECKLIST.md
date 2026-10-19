@@ -1,10 +1,10 @@
 # 구현 체크리스트와 설계 감사
 
-최신성 체크: 2026-10-19 실제 구현·검증 반영. 아래 2026-10-18 문서 감사는 초기 설계 이력이다.
+최신성 체크: 2026-10-20 실제 로컬 운영·복원·C 판정 반영. 아래 2026-10-18 문서 감사는 초기 설계 이력이다.
 
 ## 현재 상태
 
-Phase 0 기반·Phase 1 제한 fixture·Phase 2 사무실·Phase 3 협업에 이어 Phase 4 P4-01~04를 구현했다. 자동 시험188개·Chromium25개·TS16/Python26 계약 fixture를 검증했다. 실제 Codex 프로젝트2개와 AI평가3회·5종 초안·선행 수락 전 후속run0을 확인했고 결과 수락/게시/실제 merge는 수행하지 않았다. 기존 Slack/GitHub 근거와 이번 실패 시험도 README에서 구분한다. 상시 ingress·일반 CI webhook 원격 역순/철회·범용 저장소·언어 비교·P4-05/06 운영 경보/복구/C 출시 gate는 남았다. 운영 배포·새 유료 자원 생성은 수행하지 않았다.
+P4-01~04에 이어 P4-05와 P4-06의 로컬 운영/백업·복원·C 판정을 구현했다. 자동 시험206개·Chromium30개·TS16/Python26 계약·lint/typecheck/build, 실제 table44/workspace14 복원·DB/worker 장애·Slack 경보/회복 전송을 검증했다. LOCAL_FIXTURE는 READY_FOR_OWNER_REVIEW, 운영 C는 NO_GO다. off-host 복구·운영 환경/host supervisor 권한 분리·상시 ingress·일반 CI webhook 역순/철회·범용 저장소/언어는 남았다. 실제 merge·운영 배포·새 유료 자원 생성은 수행하지 않았다.
 
 ## Phase 0 — Foundation
 
@@ -61,10 +61,13 @@ Phase 0 기반·Phase 1 제한 fixture·Phase 2 사무실·Phase 3 협업에 이
 - [x] P4-02 동일 모델/상호점수 편향 표시·최초/수정 총2회·Owner 게시/이의·자동 해고/권한 상승 금지(T17). 오래된/미확정/무점수 게시 거부·UNKNOWN 공유 슬롯 차단 시험.
 - [x] P4-03 휴직/퇴사/재채용·부서 이동·task/review/usage 불변 이력(T17). PostgreSQL fixture로 과거 pinned profile/review 보존 확인.
 - [x] P4-04 Owner 조직/프로젝트·저장소/workspace/통합 격리·진행 예약 포함 예산·DAG/명시 예약·우선순위/FIFO·공유 슬롯1(T11/T17). 실제2프로젝트 test/build0·QA PASS, 후속 DEPENDENCY/run0. 범위는 제한 Node fixture/Owner 역할이며 범용 실행·세부 관리자·공정 할당 미포함.
-- [ ] P4-05 성과/비용/오류/지연/queue/Sandbox/provider·감사/경보(T19).
-- [ ] P4-06 DB/Redis/Engine/외부 장애·backup restore·운영 인계·C gate(T18/T19).
+- [x] P4-05 로컬 성과/토큰/오류/지연/queue/Sandbox/provider·구조화 로그·경보/확인/회복·고정 Slack outbox(T19). 실제 알림2건 SENT·원격 불명 재전송 금지·429 Retry-After/3회·100읽기/동시4·SSE fanout/slow-consumer 검증. 청구액 미확인/운영 SLA 미확정은 유지.
+- [x] P4-06-L 현재 PG/Codex 구조의 로컬 DB/worker/외부 장애·암호화 backup/격리 restore·점검/격리·runbook·로컬 C 기술 gate(T18/T19). 실제 table44/workspace14 내용 대조·PG 중단/재시작·native worker 강제 종료·새 호출 차단. Redis/Python Engine은 활성 구조가 아니며 실행 시험으로 세지 않음.
+- [ ] P4-06-C 운영 C 출시: off-host/새 호스트 clean 설치·RPO/RTO/secret store·운영 환경·host supervisor 프로세스/권한 분리·종료 불명 native Codex 조정·상시 ingress·범용 실행/언어 검증·Owner 승인. 현재 판정 NO_GO이며 배포/merge 미실행.
 
 2026-10-19: 전체 테스트188=이전158+Phase4 30, Chromium25=이전20+Phase4 5, lint/typecheck/contracts/build 통과. 선행 조건에 막힌 예약31건 뒤의 실행 가능한 업무가 누락되지 않는 회귀도 포함한다. 실제 성공/실패 시험과 SHA/스크린샷/사용량 범위는 README. 실제 merge/자동 결과 수락/운영 배포는 미수행이다. P4-05는 지표/큐/기본 감사 일부만 구현됐고 P4-06과 함께 전체 C 운영 출시 완료를 의미하지 않는다.
+
+2026-10-20 후속: 테스트206=188+운영18, Chromium30=25+운영5. 같은 source digest의 자동/브라우저/복구/부하/외부 근거5종 PASS와 실제 복원·알림·신선한 계측·긴급 경보 없음·점검 해제로 LOCAL_FIXTURE/blocker0을 확인했다. 첫 복원 실패와 수정 후 두 성공, 정책 복원 뒤 대기 알림 차단도 이력으로 남겼다. P4-06-C와 기존 출시 미검증 범위는 이 로컬 통과로 완료 처리하지 않는다.
 
 ## Phase 5 — 후속 기능
 

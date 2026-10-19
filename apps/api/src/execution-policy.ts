@@ -1,5 +1,6 @@
 import { ExecutionBlocked } from '@ai-pixel/agents';
 import type { Transaction } from '@ai-pixel/db';
+import {maintenanceReason} from './maintenance.js';
 
 export const executionDefaults = { companyMonthlyTokens: 2000000, projectMonthlyTokens: 1000000, runTokens: 500000, reviewTokens: 50000, providerSlots: 1 } as const;
 export const budgetMonth = () => `${new Date().toISOString().slice(0,7)}-01`;
@@ -20,6 +21,7 @@ export async function dependencyBlock(tx: Transaction, org: string, project: str
 }
 /** Call under the organization lock; amounts are completed-response tokens, never currency or subscription credits. */
 export async function reserveExecution(tx: Transaction, input: { org: string; project: string; operation: string; kind: 'WORKFLOW' | 'REVIEW'; totalTokens: number; profileLimit: number }) {
+  const maintenance=await maintenanceReason(tx);if(maintenance)throw new ExecutionBlocked(maintenance);
   const { org, project, operation, totalTokens } = input;
   const policy = await readExecutionPolicy(tx, org, project);
   const limit = Math.min(policy.company.runTokens, policy.project.runTokens, input.profileLimit, input.kind === 'REVIEW' ? executionDefaults.reviewTokens : executionDefaults.runTokens);
@@ -44,7 +46,8 @@ export async function settleExecution(tx: Transaction, org: string, operation: s
 /** One shared Codex subscription slot, across workers/projects/review jobs. Acquire before the org lock. */
 export async function sharedSlotAvailable(tx: Transaction) {
   await tx`select pg_advisory_xact_lock(9700401)`;
-  const active = await tx`select 1 from workflow_runs where status='RUNNING' or stop_lease_token is not null or checkpoint->>'stopReason'='STOP_UNVERIFIABLE'
+  if(await maintenanceReason(tx))return false;
+  const active = await tx`select 1 from workflow_runs where status='RUNNING' or stop_lease_token is not null or checkpoint->>'stopReason' in ('STOP_UNVERIFIABLE','RECOVERY_REQUIRED')
     union all select 1 from performance_review_jobs where status in ('RUNNING','UNKNOWN') limit 1`;
   return active.length === 0;
 }

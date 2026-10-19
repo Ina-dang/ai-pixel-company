@@ -62,6 +62,8 @@ B 출시: R01~R11/R18 최소 통제를 실제 테스트로 충족한다. C 출�
 
 2026-10-19 구현: Phase 4 P4-01~04 직원 평가·이력·다중 프로젝트/DAG/명시 예약은 제한 Node fixture와 조직 Owner 모델로 검증했다. 운영 경보/장애 복구/backup restore/인계 P4-05~06은 남았으므로 전체 Phase 4/C 출시 완료로 판정하지 않는다. 실제 근거는 README·[체크리스트](IMPLEMENTATION_CHECKLIST.md)·ADR-014를 따른다.
 
+2026-10-20 후속: P4-05 로컬 계측/경보·P4-06-L 암호화 backup/격리 restore·실제 PG/worker 장애·C 판정을 구현해 제한 fixture 기술 gate를 통과했다. 운영 C는 NO_GO이며 off-host/새 호스트·운영 환경/host supervisor 권한 분리·RPO/RTO·기존 상시 ingress/범용 실행/언어 비교·Owner 승인 등은 별도다. 배포·실제 merge는 수행하지 않았다. ADR-015와 최신 README/체크리스트를 따른다.
+
 ## 11. 미확정 사항
 
 착수일·개발 시간·외부 App 심사·목표 저장소/부하·실제 provider 예산이 확인되지 않았다. Phase 0 종료 시 구현 속도를 근거로 일정과 비용을 다시 추정한다.

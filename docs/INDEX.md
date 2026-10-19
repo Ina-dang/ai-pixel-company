@@ -2,7 +2,7 @@
 
 사무실 화면 시범(2026-10-19): Phaser·서버 상태 계약을 유지하며 MIT 팔레트 함수만 선별 재사용하고 원본 그래픽·가구·러그·말풍선을 개선했다. 당시 테스트141개·Chromium17개와 실제 서버 대조를 통과했고 사용자가 수락했다. 적용 범위·라이선스는 README와 09에 기록했다.
 
-최신성 체크: 2026-10-19. Phase 4 P4-01~04의 5유형 평가·부서 이력·다중 프로젝트 토큰 예약/DAG/scheduler를 구현했다. 자동 테스트188개·Chromium25개·TS16/Python26 계약 fixture를 검증했고 실제 Codex 프로젝트2개와 AI평가3회가 완료돼 결과 수락/평가 초안으로 남았다. 실제 merge는 미수행이며 기존 GitHub draft PR2의 merged=false를 재확인했다. P4-05/06 운영 경보/backup restore/C 출시 gate, 상시 ingress·일반 CI webhook 원격 역순/철회·범용 저장소·언어 비교·Phase 5는 남았다. 임시 터널은 닫혀 있다. ADR-014와 README·체크리스트를 따른다.
+최신성 체크: 2026-10-20. P4-05/06 로컬 운영 계측·경보/Slack outbox·암호화 백업·격리 복원·C 판정을 추가했다. 테스트206개·Chromium30개·TS16/Python26 계약·lint/typecheck/build와 실제 table44/workspace14 복원·DB/worker 장애·Slack 시험 전송2건을 확인했다. LOCAL_FIXTURE는 READY_FOR_OWNER_REVIEW/blocker0, 운영 C는 NO_GO다. off-host/운영 환경·host supervisor 분리·상시 ingress·일반 CI webhook 역순/철회·범용 저장소/언어·Phase 5는 남았다. 실제 merge/운영 배포/추가 유료 모델·인프라는 미수행이다. ADR-015·15장 runbook·README·체크리스트를 따른다.
 
 | 파일 | 목적 | 상태 |
 |---|---|---|

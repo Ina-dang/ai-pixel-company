@@ -28,6 +28,9 @@ import { IntegrationService } from './integrations.js';
 import { createTaskCommand } from './task-commands.js';
 import { projectOperationsRoutes } from './project-operations.js';
 import { ReviewService } from './reviews.js';
+import {OperationsService} from './operations.js';
+import {maintenanceReason} from './maintenance.js';
+import {routeLabel} from './operations-model.js';
 
 export { initializeOwner, transitionTaskForVerification } from './repository.js';
 export type { ApiConfig } from './security.js';
@@ -80,9 +83,10 @@ function nextPage(row: { id: string; cursor_time: string } | undefined) {
   return row ? Buffer.from(JSON.stringify({ id: row.id, createdAt: row.cursor_time })).toString('base64url') : null;
 }
 
-export function createApp({ database, config, workflowProvider, integrations, reviews }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService; reviews?: ReviewService }) {
+export function createApp({ database, config, workflowProvider, integrations, reviews, operations,structuredLogs=false }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService; reviews?: ReviewService; operations?:OperationsService;structuredLogs?:boolean }) {
   const app = new Hono<ApiEnv>();
   const integrationService = integrations ?? new IntegrationService(database, fileURLToPath(new URL('../../../', import.meta.url)));
+  const operationService=operations??new OperationsService(database,fileURLToPath(new URL('../../../',import.meta.url)));
   const loginAttempts: number[] = [];
   const cookieOptions = {
     path: '/', httpOnly: true, secure: config.cookieSecure,
@@ -90,10 +94,13 @@ export function createApp({ database, config, workflowProvider, integrations, re
   };
   app.use('*', secureHeaders({ strictTransportSecurity: false }));
   app.use('*', async (c, next) => {
+    const started=performance.now();
     c.set('requestId', randomUUID());
     c.header('X-Request-ID', c.get('requestId'));
     c.header('Cache-Control', 'no-store');
     await next();
+    const ms=performance.now()-started;operationService.metrics.record(c.req.path,c.res.status,ms);
+    if(structuredLogs)console.log(JSON.stringify({level:'info',requestId:c.get('requestId'),method:c.req.method,route:routeLabel(c.req.path),status:c.res.status,durationMs:Math.round(ms)}));
   });
   app.use('/api/*', bodyLimit({ maxSize: 65_536, onError: () => { throw new ApiError(413, 'INVALID_INPUT', '요청 크기가 너무 큽니다.'); } }));
 
@@ -109,11 +116,9 @@ export function createApp({ database, config, workflowProvider, integrations, re
     }, requestId: c.get('requestId') }, status);
   });
   app.notFound((c) => c.json({ error: { code: 'NOT_FOUND', messageKo: '경로를 찾을 수 없습니다.', retryable: false }, requestId: c.get('requestId') }, 404));
-  app.get('/health', async (c) => {
-    await database.sql`select 1`;
-    return c.json({ status: 'ok', phase: 3,
-      agentWorkerConfigured: Boolean(workflowProvider), subscriptionReadiness: '/api/v1/subscription' });
-  });
+  app.get('/health/live',c=>c.json({status:'ok',phase:4}));
+  const readiness=async(c:Context<ApiEnv>)=>{let timer:ReturnType<typeof setTimeout>|undefined;try{const paused=await Promise.race([(async()=>{await database.sql`select 1`;return maintenanceReason(database.sql);})(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('READINESS_TIMEOUT')),2000);})]);return c.json({status:paused?'maintenance':'ok',phase:4,agentWorkerConfigured:Boolean(workflowProvider),subscriptionReadiness:'/api/v1/subscription'},paused?503:200);}catch{return c.json({status:'unavailable',phase:4},503);}finally{if(timer)clearTimeout(timer);}};
+  app.get('/health',readiness);app.get('/health/ready',readiness);
 
   app.post('/api/v1/auth/session', async (c) => {
     checkOrigin(c, config);
@@ -172,6 +177,7 @@ export function createApp({ database, config, workflowProvider, integrations, re
   app.route('/api/v1', integrationService.routes());
   app.route('/api/v1', projectOperationsRoutes(database, workflowProvider));
   app.route('/api/v1', (reviews ?? new ReviewService(database, workflowProvider)).routes());
+  app.route('/api/v1',operationService.routes());
   app.delete('/api/v1/auth/session', async (c) => {
     const auth = c.get('auth');
     await database.sql.begin(async (tx) => {
@@ -296,6 +302,7 @@ export function createApp({ database, config, workflowProvider, integrations, re
     const projects = await database.sql`select 1 from projects where id=${projectId} and organization_id=${organizationId}`;
     if (!projects.length) throw new ApiError(404, 'NOT_FOUND', '프로젝트를 찾을 수 없습니다.');
     const token = getCookie(c, 'pixel_session');
+    if(!operationService.metrics.openStream())throw new ApiError(429,'SSE_CONNECTION_LIMIT','동시 실시간 연결 상한에 도달했습니다. 기존 연결을 닫고 다시 확인하세요.');
     c.header('X-Accel-Buffering', 'no');
     c.header('Content-Encoding', 'identity');
     c.header('Cache-Control', 'no-cache, no-transform');
@@ -303,10 +310,11 @@ export function createApp({ database, config, workflowProvider, integrations, re
       let aborted = false;
       let heartbeatAt = 0;
       stream.onAbort(() => { aborted = true; });
+      const bounded=async(work:Promise<unknown>)=>{let timer:ReturnType<typeof setTimeout>|undefined;try{await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>{operationService.metrics.slowStream();aborted=true;stream.abort();reject(new Error('SSE_SLOW_CONSUMER'));},5000);})]);}finally{if(timer)clearTimeout(timer);}};
       try {
         while (!aborted && !c.req.raw.signal.aborted) {
           if (!(await authenticate(database, token))) {
-            await stream.writeSSE({ event: 'stream.auth-error', data: JSON.stringify({ messageKo: '세션이 만료되었습니다. 다시 로그인하세요.' }) });
+            await bounded(stream.writeSSE({ event: 'stream.auth-error', data: JSON.stringify({ messageKo: '세션이 만료되었습니다. 다시 로그인하세요.' }) }));
             break;
           }
           const since = new Date(Date.now() - config.sseRetentionDays * 86_400_000);
@@ -317,31 +325,31 @@ export function createApp({ database, config, workflowProvider, integrations, re
           const latest = BigInt(range[0]?.latest ?? '0');
           const earliest = range[0]?.earliest === null || range[0]?.earliest === undefined ? latest + 1n : BigInt(range[0].earliest);
           if (BigInt(cursor) > latest || BigInt(cursor) < earliest - 1n) {
-            await stream.writeSSE({ event: 'stream.reset', data: JSON.stringify({ reason: 'CURSOR_EXPIRED', messageKo: '최신 상태를 다시 불러오세요.' }) });
+            await bounded(stream.writeSSE({ event: 'stream.reset', data: JSON.stringify({ reason: 'CURSOR_EXPIRED', messageKo: '최신 상태를 다시 불러오세요.' }) }));
             break;
           }
           const rows = await database.sql<EventRow[]>`select * from agent_events where organization_id=${organizationId} and sequence>${cursor} order by sequence limit ${config.sseBatchSize + 1}`;
           if (rows.length > config.sseBatchSize) {
-            await stream.writeSSE({ event: 'stream.reset', data: JSON.stringify({ reason: 'BACKLOG_LIMIT', messageKo: '최신 상태를 다시 불러오세요.' }) });
+            await bounded(stream.writeSSE({ event: 'stream.reset', data: JSON.stringify({ reason: 'BACKLOG_LIMIT', messageKo: '최신 상태를 다시 불러오세요.' }) }));
             break;
           }
           for (const row of rows) {
             if (aborted) break;
-            if (row.project_id === projectId) await stream.writeSSE({ id: String(row.sequence), event: row.type, data: JSON.stringify(eventView(row)) });
+            if (row.project_id === projectId) await bounded(stream.writeSSE({ id: String(row.sequence), event: row.type, data: JSON.stringify(eventView(row)) }));
             cursor = String(row.sequence);
           }
-          if (rows.length) await stream.writeSSE({ id: cursor, event: 'stream.cursor', data: JSON.stringify({ cursor }) });
+          if (rows.length) await bounded(stream.writeSSE({ id: cursor, event: 'stream.cursor', data: JSON.stringify({ cursor }) }));
           if (Date.now() - heartbeatAt >= config.sseHeartbeatMs) {
-            await stream.write(': heartbeat\n\n');
+            await bounded(stream.write(': heartbeat\n\n'));
             heartbeatAt = Date.now();
           }
           await stream.sleep(config.ssePollMs);
         }
       } catch {
         if (!aborted && !c.req.raw.signal.aborted) {
-          await stream.writeSSE({ event: 'stream.reset', data: JSON.stringify({ reason: 'STREAM_UNAVAILABLE', messageKo: '연결을 복구하고 있습니다.' }) }).catch(() => undefined);
+          await bounded(stream.writeSSE({ event: 'stream.reset', data: JSON.stringify({ reason: 'STREAM_UNAVAILABLE', messageKo: '연결을 복구하고 있습니다.' }) })).catch(() => undefined);
         }
-      }
+      }finally{operationService.metrics.closeStream();}
     });
   });
   return app;

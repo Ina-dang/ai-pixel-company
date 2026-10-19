@@ -92,7 +92,7 @@ export class WorkflowRepository implements WorkflowStore {
     // One local subscription backs all projects. An unconfirmed stop survives
     // restart and fences other queued work, including when no thread ID arrived.
     const unsafe = await this.database.sql`select 1 from workflow_runs where stop_lease_token is not null
-      or checkpoint->>'stopReason'='STOP_UNVERIFIABLE' limit 1`;
+      or checkpoint->>'stopReason' in ('STOP_UNVERIFIABLE','RECOVERY_REQUIRED') limit 1`;
     if (unsafe.length) return null;
     // Lock order is organization counter, run, task in every mutation.
     const candidates = await this.database.sql<{ organization_id: string }[]>`select organization_id from

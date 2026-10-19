@@ -29,6 +29,9 @@
     "verify:approval-live": "tsx scripts/phase3-approval-smoke.ts",
     "verify:slack-command-live": "tsx scripts/phase3-slack-smoke.ts",
     "verify:company-live": "tsx scripts/phase4-smoke.ts",
+    "ops": "tsx scripts/operations-cli.ts",
+    "verify:operations-live": "tsx scripts/verify-operations.ts",
+    "verify:release": "tsx scripts/verify-release.ts",
     "dev:webhook-relay": "tsx scripts/webhook-relay.ts",
     "verify": "pnpm lint && pnpm typecheck && pnpm verify:contracts && pnpm test && pnpm build"
   },

@@ -1,5 +1,11 @@
 # 데이터베이스 설계
 
+## P4-05/06 운영 저장 계약 — 2026-10-20
+
+Migration0009는 `operations_controls`, `operations_snapshots`, `operations_alerts/events`, `operations_notification_policies/outbox`, `operations_jobs`, `operations_backups`, `operations_release_checks`를 추가한다. 기존 domain 행/이력을 삭제하지 않는다. controls는 단조 version·LIVE/RESTORE_QUARANTINE·점검 token, alerts는 원인별 활성 episode 유일성, outbox는 event 유일성과 최대3회/UNKNOWN, jobs는 단일 active/UNKNOWN gate를 사용한다. 경보/출시 검증 이력은 update/delete를 금지한다.
+
+백업 DB는 exported MVCC snapshot과 동일한 table count/digest를 보존한다. 검증 전용 복원본은 대조 후 session/connection/schedule/이전 승인·전송을 격리하며 기존 task/run/review 원문·snapshot을 바꾸지 않는다. 실제 백업 파일/키/복원 파일/검증 Artifact는 `.local`의 Git 제외 경로다. API는 암호화 파일 SHA·bytes/시간·결과만 반환하고 dump/키/DB 연결 문자열은 반환하지 않는다. release check는 현재 source digest·상태/근거 시각과 연결하며 클라이언트 PASS 입력 API는 없다.
+
 ## Phase 4 실제 저장 계약 — 2026-10-19
 
 Migration0006~0008은 조직/프로젝트 토큰 정책, UTC 월별 실행 예약·정산, 동일 프로젝트 DAG와 명시적 task 예약, 부서와 불변 이동 이력, 5유형 평가·불변 수정본·Owner 검토·AI 생성 작업을 추가한다. 기존 task/run/승인/통합 데이터는 삭제하지 않는다. 과거 완료 role의 공급자 보고 토큰만 월별 정산에 반영하며 통화 비용은 추정하지 않는다.

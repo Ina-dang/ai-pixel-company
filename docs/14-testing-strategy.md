@@ -1,5 +1,13 @@
 # 테스트·품질·에이전트 평가
 
+## P4-05/06 실제 검증 — 2026-10-20
+
+전체206=이전188+운영18, Chromium30=이전25+운영5, lint/typecheck·계약 TS16/Python26·build를 실행해 PASS를 기록했다. 계측/경보 dedupe·확인/회복·권한 철회·전송 UNKNOWN/429·점검/복원 격리·주기 lease recovery·SSE fanout/느린 소비자·기한/크기·암호 인증/경로 검사를 포함한다. 기본 테스트의 외부 공급자는 대역이며 실제 Slack 전송과 구분한다.
+
+실제 opt-in은 암호화 파일449,791 bytes·테이블44/코드14의 복원 대조, 격리 PG 실제 중단/재시작 후 상태 보존, 별도 native worker의 강제 종료 후 자동 재호출 금지를 확인했다. worker의 공급자는 비과금 대역으로 실제 Codex 강제 종료 성공을 주장하지 않는다. 기존 실제 GitHub/Slack 인증과 시험 경보/회복2건 SENT, 실제 API100읽기/동시4/p95 11ms, 실제 운영 화면/키보드/390px/page error0을 확인했다. 첫 복원 실패와 알림 정책 복원 뒤 차단도 README에서 별도로 보고한다.
+
+동일 source digest의 검증5종과 runtime/restore/전송 근거를 함께 검사해 로컬 gate는 READY_FOR_OWNER_REVIEW, 운영 gate는 NO_GO다. Redis/Python Engine은 활성 구조에 없어 NOT_IN_ACTIVE_ARCHITECTURE이며 시험 통과로 세지 않는다. off-host/clean host·운영 환경·supervisor 권한 분리·RPO/RTO·상시 ingress/범용 실행/언어 비교는 미검증이다. 실제 merge/운영 배포·새 유료 모델/인프라는 미수행이다.
+
 ## Phase 4 실제 검증 — 2026-10-19
 
 전체 단위/통합188개(이전158+Phase4 30), Chromium25개(이전20+Phase4 5), lint/typecheck/계약 TS16·Python26/build를 실행했다. Phase4는 실제 PostgreSQL의 evidence/null/rubric/불변 이력·편향/loop·권한 철회/UNKNOWN·프로젝트 격리·DAG 순환·예산 경합·명시 예약·archive/부서/퇴사 이력을 검사한다. 선행 조건에 막힌 예약31건 뒤의 실행 가능한 업무 누락도 회귀 검증한다. 기본 테스트의 공급자는 제어된 대역이며 모델을 호출하지 않는다.
