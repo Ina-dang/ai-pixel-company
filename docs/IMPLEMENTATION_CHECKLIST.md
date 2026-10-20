@@ -1,12 +1,68 @@
 # 구현 체크리스트와 설계 감사
 
-최신성 체크: 2026-10-20 실제 Phase 5 로컬 STT·브라우저·새 schema 복원 반영. 아래 2026-10-18 문서 감사는 초기 설계 이력이다.
+최신성 체크: 2026-10-21 문서·사무실 후속 정리. 실제 업무 시범은 2026-10-20 기록과 구분한다.
 
 ## 현재 상태
 
-P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건의 녹음/전사/취소·텍스트/파일 정리를 서버와 대조했다. 앱의 마이크 차단 헤더를 self로 수정했다. 최종 자동244=42+78+124(19파일/순차3묶음)·Chromium45=기존40+진단/정책5·TS16/Python26 계약/lint/typecheck/build PASS다. 단일 명령 시간 제한과 중간 Docker 실패를 보존하며 README의 시점별 근거를 따른다. 전사 오인식·다른 환경/운영 개인정보·기존 운영 C 제한은 남았고 실제 merge·운영 배포·새 유료 자원은 미수행이다.
+**how-to-trash 지역 목록·검색 개선: 최종 QA 승인 대기**
+
+| 구분 | 상태 |
+|---|---|
+| 수락된 검증 | Phase 5 로컬 음성·Windows 복구·실제 사용자 마이크 1건 |
+| 현재 실제 업무 | 고정 저장소에서 PM·Developer 코드 수정, 오프라인 검사·브라우저 네 조건 확인 |
+| 남은 검증 | QA 1차 FAIL. 기존 15분 종료 뒤 추가 5분·QA 1회 승인 대기 |
+| 직전 전체 회귀 (2026-10-20) | 자동 **257개** = 42 + 80 + 135 · Chromium **47개** 통과 |
+| 사무실 후속 (2026-10-21) | 관련 단위·동기화 **10개** · 사무실 Chromium **8개** 통과 |
+| 정적 검사·빌드 | TS 16 / Python 26 계약·lint·typecheck·build 통과 |
+| 전달·출시 | 현재 업무의 최종 QA·수락·push 미완료. 운영 C **NO_GO** |
+
+실제 merge·운영 배포·새 유료 자원은 미수행이다.
+실행 ID·SHA·실패 이력은 [README](../README.md)와 [ADR-019](17-decision-log.md)에 연결한다.
+
+## 다음 진행 순서
+
+1. **추가 검증 승인 확인** — 같은 후보에 5분·QA 1회만 허용할지 확인한다.
+2. **같은 후보 최종 QA** — 코드 재생성 없이 브라우저·명령 근거를 보완한다.
+3. **결과 확인·push** — QA PASS·동일 SHA 검사 뒤 변경을 전달한다. 결과 수락은 별도다.
+
+## 단계별 한눈에 보기
+
+체크는 **각 항목에 적힌 범위의 충족**을 뜻한다. 단계 전체나 운영 출시 승인을 뜻하지 않는다.
+특히 P5-03은 기능 구현이 아니라 **보류 결정**을 확인한 항목이다.
+
+| 단계 | 체크 / 전체 | 남은 항목·판정 |
+|---|---:|---|
+| [Phase 0 · 기반](#phase-0--foundation) | 11 / 11 | 기반 gate 통과 |
+| [Phase 1 · 실행](#phase-1--ai-agent-core) | 9 / 10 | P1-09 언어 비교 |
+| [Phase 2 · 사무실](#phase-2--pixel-office--b-출시) | 4 / 5 | P2-05 전체 B 출시 gate |
+| [Phase 3 · 협업](#phase-3--collaboration--recruitment) | 6 / 7 | P3-01 원격 CI 역순·철회 |
+| [Phase 4 · 운영](#phase-4--company-operations--c-출시) | 6 / 7 | P4-06-C 운영 C 출시 NO_GO |
+| [Phase 5 · 후속](#phase-5--후속-기능) | 3 / 5 | P5-02-H 환경·정책 / P5-04 최적화 |
+
+집계: 체크 **39개** = 11 + 9 + 4 + 6 + 6 + 3, 미체크 **6개**, 총 **45개**.
+아래의 별도 사무실 시범 확인 6개는 이 집계에 포함하지 않는다.
+
+## 미완료 항목
+
+| ID | 남은 일 | 확인할 근거 |
+|---|---|---|
+| P1-09 | 같은 과제의 한국어·영어 품질·비용·시간 비교 | 표본·한계를 포함한 T12 비교 |
+| P2-05 | 전체 B 출시 조건 충족 | 언어 비교·범용 저장소 등 잔여 검증. 고정 저장소 시범과 구분 |
+| P3-01 | 일반 CI webhook의 원격 역순·권한 철회 시험 | 실제 원격 이벤트·차단 기록 |
+| P4-06-C | 운영 환경·복구·권한·상시 ingress·Owner 승인 | 아래 상세 조건과 운영 C gate |
+| P5-02-H | 다른 환경·소음·장문·운영 metadata 정책 | Windows 복구·마이크 1건을 넘어선 검증 |
+| P5-04 | 자동 모델·비용 최적화의 도입 판단 | 품질·성공률·rollback 근거 |
+
+## 상세 체크리스트
+
+단계별로 펼치면 원래 항목·테스트 ID·시점별 근거를 볼 수 있다.
 
 ## Phase 0 — Foundation
+
+**기반 gate 통과 · 11 / 11**
+
+<details>
+<summary>인증·DB·API·SSE·대시보드 항목 보기</summary>
 
 - [x] P0-01 Git·feat/phase-0-foundation·ignore, 지정 원격/Ina-dang 계정 확인.
 - [x] P0-02 Node22.20/pnpm10.15.1/PG18.6 등 실제 조합·lock/digest 확인(ADR-010). 패키지 감사0건.
@@ -22,7 +78,14 @@ P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건
 
 완료 gate: 인증된 프로젝트/업무 생성·조회, 상태 이력 저장, SSE 수신·재접속·새로고침 복원이 실제로 통과한다.
 
+</details>
+
 ## Phase 1 — AI Agent Core
+
+**제한 fixture 핵심 경로 통과 · 9 / 10 · P1-09 남음**
+
+<details>
+<summary>실행·격리·예산·승인 항목과 검증 이력 보기</summary>
 
 - [x] P1-01 ADR-011로 PG 영구 큐→Node Codex worker 대체. concurrent claim·lease fencing 실증. Redis/Python HTTP 미도입.
 - [x] P1-02 JSON checkpoint/실제 thread ID·pause/cancel/stop ack·수동 resume·만료 lease fail-closed 복구. 별도 provider turnId는 미노출로 null.
@@ -37,7 +100,18 @@ P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건
 
 현재 판정: 제한 fixture 핵심 경로 통과. 단위/통합69개, Chromium5개 및 실제 구독 PM→Developer→QA 성공을 확인한다. P1-09 언어 비교는 미실행이며 전체 Phase 1 완료로 표시하지 않는다. 범용 저장소는 현재 허용하지 않는다. 원격 PR은 Phase 3 gate다. 실행별 실제 사용량/승인 상태는 DB와 UI가 기준이다.
 
+</details>
+
 ## Phase 2 — Pixel Office / B 출시
+
+**로컬 사무실 검증 통과 · 4 / 5 · 전체 B 출시 미완료**
+
+2026-10-21 화면 정리: 차용 팔레트 함수 제거, 연속 세로 벽·장식 축소·최대 896px 그림·HTML 이름표/활동 표시로 변경했다.
+실제 서버의 PM IDLE / Developer BLOCKED / QA IDLE 대조와 데스크톱·390px 확인을 통과했다.
+새 모델 호출·결과 수락·업무 변경·merge·배포 없이 화면만 검증했다. 아래 시범 기록은 과거 이력이다.
+
+<details>
+<summary>그래픽·서버 상태 연동·B 출시 조건 보기</summary>
 
 - [x] P2-01 Phaser3.90.0/MIT·Tiled JSON·직접 제작 CC0 자산·client-only 생성/정리·재시도/단일 canvas.
 - [x] P2-02 대표/개발/회의/QA/공용 공간·3명·한국어 말풍선·충돌 회피. 상호작용 지점64개 경로 검사.
@@ -47,7 +121,14 @@ P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건
 
 2026-10-20 실제 저장소 1차: 사용자가 how-to-trash 지역 목록/검색을 선택했다. 고정 commit/admission/image·파일/명령 경계·실제 PM/Developer 수정과 테스트/build·사무실 상태·네 가지 브라우저 기능 흐름을 확인했다. QA 1차 FAIL·원래 15분 시간 종료를 보존하며 최종 QA의 별도 5분/1회 승인 대기다. 자동257=42+80+135 통과, 최종 QA/push 미완료다. 이 시범이나 사용자 Phase5 수락을 B/C 출시·merge/운영 배포 승인으로 확대하지 않는다. README·ADR-019를 따른다.
 
+</details>
+
 ## Phase 3 — Collaboration & Recruitment
+
+**협업·채용 검증 · 6 / 7 · 원격 CI 역순·철회 미검증**
+
+<details>
+<summary>GitHub·Slack·merge 승인·채용 항목 보기</summary>
 
 - [ ] P3-01 App JWT/제한 token·서명 inbox·역순 reconcile 자동 시험 통과. 실제 App 한 저장소 설치·인증 및 ping HTTP202/중복 제거·PROCESSED 1건 확인. 일반 CI webhook의 원격 역순/철회는 미검증.
 - [x] P3-02 후보 manifest/원격 commit SHA 분리·불변 fixture byte 검사·version/권한·UNKNOWN/429 gate 및 실제 App Issue/branch/push/draft PR 검증. 원격 전체 파일 일치·동일 SHA Docker 재검증, 현재 head 로컬 검사 status PASS를 App이 조회. hosted Actions 미실행.
@@ -57,7 +138,14 @@ P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건
 - [x] P3-06 세 템플릿·Codex 구독 기본 모델만·성향/도구/turn-token-time 상한·부서/프로젝트·고용/불변 프로필 이력 구현·실제 PG 시험 통과(T16).
 - [x] P3-07 신규 Developer 채용·배정 후 실제 Codex 코드 수정/test/build0/QA PASS·브라우저 이름·reload/390px 검증. 프로필 snapshot·권한 철회·교체 직원 집계 시험 통과(T16). run/SHA는 README 참조.
 
+</details>
+
 ## Phase 4 — Company Operations / C 출시
+
+**로컬 운영·복원 검증 · 6 / 7 · 운영 C NO_GO**
+
+<details>
+<summary>평가·다중 프로젝트·경보·복원·운영 출시 조건 보기</summary>
 
 - [x] P4-01 AUTO/SELF/PEER/PM/USER·facts/opinion·rubric1/null·한국어 원문/요약·불변 근거/수정본(T17). PG/API와 실제 Codex AI3종 각1회·5종 DRAFT 확인.
 - [x] P4-02 동일 모델/상호점수 편향 표시·최초/수정 총2회·Owner 게시/이의·자동 해고/권한 상승 금지(T17). 오래된/미확정/무점수 게시 거부·UNKNOWN 공유 슬롯 차단 시험.
@@ -67,11 +155,18 @@ P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건
 - [x] P4-06-L 현재 PG/Codex 구조의 로컬 DB/worker/외부 장애·암호화 backup/격리 restore·점검/격리·runbook·로컬 C 기술 gate(T18/T19). 실제 table44/workspace14 내용 대조·PG 중단/재시작·native worker 강제 종료·새 호출 차단. Redis/Python Engine은 활성 구조가 아니며 실행 시험으로 세지 않음.
 - [ ] P4-06-C 운영 C 출시: off-host/새 호스트 clean 설치·RPO/RTO/secret store·운영 환경·host supervisor 프로세스/권한 분리·종료 불명 native Codex 조정·상시 ingress·범용 실행/언어 검증·Owner 승인. 현재 판정 NO_GO이며 배포/merge 미실행.
 
-2026-10-19: 전체 테스트188=이전158+Phase4 30, Chromium25=이전20+Phase4 5, lint/typecheck/contracts/build 통과. 선행 조건에 막힌 예약31건 뒤의 실행 가능한 업무가 누락되지 않는 회귀도 포함한다. 실제 성공/실패 시험과 SHA/스크린샷/사용량 범위는 README. 실제 merge/자동 결과 수락/운영 배포는 미수행이다. P4-05는 지표/큐/기본 감사 일부만 구현됐고 P4-06과 함께 전체 C 운영 출시 완료를 의미하지 않는다.
+**2026-10-19 당시 기록**: 전체 테스트188=이전158+Phase4 30, Chromium25=이전20+Phase4 5, lint/typecheck/contracts/build 통과. 선행 조건에 막힌 예약31건 뒤의 실행 가능한 업무가 누락되지 않는 회귀도 포함한다. 실제 성공/실패 시험과 SHA/스크린샷/사용량 범위는 README. 실제 merge/자동 결과 수락/운영 배포는 미수행이다. 당시 P4-05는 지표/큐/기본 감사 일부만 구현됐으며, 아래 2026-10-20 후속 검증과 구분한다. 전체 C 운영 출시 완료를 의미하지 않는다.
 
 2026-10-20 후속: 테스트206=188+운영18, Chromium30=25+운영5. 같은 source digest의 자동/브라우저/복구/부하/외부 근거5종 PASS와 실제 복원·알림·신선한 계측·긴급 경보 없음·점검 해제로 LOCAL_FIXTURE/blocker0을 확인했다. 첫 복원 실패와 수정 후 두 성공, 정책 복원 뒤 대기 알림 차단도 이력으로 남겼다. P4-06-C와 기존 출시 미검증 범위는 이 로컬 통과로 완료 처리하지 않는다.
 
+</details>
+
 ## Phase 5 — 후속 기능
+
+**로컬 음성·복구·마이크 검증 수락 · 3 / 5 · 환경·정책·최적화 남음**
+
+<details>
+<summary>STT·음성 정리·미검증 환경·보류 기능 보기</summary>
 
 - [x] P5-01 공식 배포/모델 hash·MIT 확인 후 로컬 whisper.cpp/tiny STT 후보→수정/확인→기존 공통 task command(T20). 일반 task POST의 VOICE 위조 거부·source/version/원문·수정 감사 연결.
 - [x] P5-02-L 정상 처리/취소의 임시 WAV 삭제·동의·만료·30초/동시1/UTC일20회/60초 timeout·권한 재검사·위험 별도 승인(T20). 실제 native 취소/close, 원시 파일0, 수정 확인 뒤 TODO/자동 run0 확인. 유료 fallback/자동 retry 없음.
@@ -83,7 +178,16 @@ P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건
 
 2026-10-20 후속 복구 검증: DB 경계11+Windows 실행 경계8+실제 API 강제 종료2=추가21개. 실제 whisper와 장시간 native 대역을 구분했다. API 강제 종료 전 native 생존/복구 시 이미 종료를 관찰했고 WAV1개 삭제·잔여0·task/run0, 별도 Windows 시험에서는 살아 있는 정확한 잔여 native1개 종료를 확인했다. 브라우저 추가3개는 복구 동의/version·실패 차단 유지·숨김 녹음 폐기다. 물리 마이크 성공을 주장하지 않는다. 최종 전체244/40과 기존 223/37 수락 이력을 구분한다.
 
-## 문서 정합성 자체 감사
+</details>
+
+## 초기 설계·시범 검증 이력
+
+현재 진행 상태와 구분한 과거 기록이다. 당시의 미실행·착수 판정을 보존한다.
+
+<details>
+<summary>2026-10-18 설계 감사 · 2026-10-19 Phase 0 착수·사무실 시범 기록</summary>
+
+### 문서 정합성 자체 감사
 
 | 원문 검증 기준 | 설계 위치 | 확인 수준 |
 |---|---|---|
@@ -122,7 +226,7 @@ Critical(현재 설계 착수를 막는 문서 결함)은 자체 검토에서 �
 
 자체 검토에서 발견한 사용자 평가 원문/nullable 점수, 미확인 토큰의 null 처리, REQUEST_CHANGES 결정 메타데이터를 DB/API 문서에 맞췄다. 정적 검사는 링크 대상/JSON/문서 구조를 확인하는 것으로 API·DB·SSE·샌드박스 실제 동작을 검증하지 않는다. lint/typecheck/test/build는 서비스 코드/설정이 없어 미실행이다.
 
-## Phase 0 착수 평가
+### Phase 0 착수 평가
 
 ### 사무실 화면 시범 확인 — 2026-10-19
 
@@ -138,3 +242,5 @@ Critical(현재 설계 착수를 막는 문서 결함)은 자체 검토에서 �
 **Phase 0 완료**. 2026-10-19 실제 테스트·브라우저 검증으로 기반 gate를 통과했다. D07의 Phase0 버전/설치 불확실성은 ADR-010으로 해소했다. D06(Sandbox 실차단)은 Phase1의 실행 차단 조건으로 유지한다. Phase1은 provider/예산·격리 검증을 전제로 CONDITIONAL GO다.
 
 현재 이력 보충(2026-10-19): 위 최초 착수 경로는 ADR-011로 대체했다. 구독/PG checkpoint/lease/제한 Sandbox/PM·Dev·QA 핵심 검증을 완료했고 Phase 1 최종 결과를 사용자 지시로 수락했다. Phase 2 사무실과 실제 Codex→브라우저 상태 연동도 검증했다(README의 run/SHA 근거). 다음 우선순위는 새 검증 결과의 Owner 검토, 언어 비교 실험의 필요성 판단, 범용 저장소 격리·의존성 정책 및 Phase 3 범위 결정이다. 운영 배포와 merge는 별도 승인한다.
+
+</details>

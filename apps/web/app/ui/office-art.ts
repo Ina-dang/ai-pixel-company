@@ -1,9 +1,8 @@
 import type Phaser from 'phaser';
-import { pickDiversePalette } from './vendor/pixel-agents-palette';
 
 // Original, code-drawn artwork and layout dedicated to CC0-1.0. No downloaded art.
 export const OFFICE_ART_PROVENANCE = {
-  id: 'ai-pixel-office-original-v2',
+  id: 'ai-pixel-office-original-v3',
   license: 'CC0-1.0',
   source: 'Original AI Pixel Company procedural Canvas2D pixel art',
   thirdPartyImages: false,
@@ -12,13 +11,7 @@ export const OFFICE_ART_PROVENANCE = {
 export const STAFF_STATES = ['idle', 'walk', 'type', 'review', 'wait', 'error', 'complete'] as const;
 export type StaffAnimation = typeof STAFF_STATES[number];
 export const STAFF_ROLES = ['PM', 'DEVELOPER', 'QA'] as const;
-const WARDROBE = ['#7585a9', '#4b9185', '#bd926d'];
-const paletteCounts = WARDROBE.map(() => 0);
-const roleClothes = Object.fromEntries(STAFF_ROLES.map(role => {
-  const chosen = pickDiversePalette(WARDROBE.length, paletteCounts, () => 0);
-  paletteCounts[chosen.palette] += 1;
-  return [role, WARDROBE[chosen.palette]];
-})) as Record<typeof STAFF_ROLES[number], string>;
+const roleClothes = { PM: '#7585a9', DEVELOPER: '#4b9185', QA: '#bd926d' } as const;
 
 function rectangle(context: CanvasRenderingContext2D, color: string, x: number, y: number, width: number, height: number) {
   context.fillStyle = color;
@@ -41,10 +34,15 @@ function tile(context: CanvasRenderingContext2D, id: number) {
     r('#ffffff18', 0, 0, 32, 1); return;
   }
   if (id === 5) { wood('#c9a585', '#b38e70'); return; }
-  if ([6, 7, 8, 29, 30].includes(id)) {
-    r('#f2ede1', 0, 0, 32, 32); r('#fffaf0', 0, 0, 32, 3);
-    r('#d6cdbd', 0, 20, 32, 2); r('#353d50', 0, 22, 32, 8); r('#232a40', 0, 30, 32, 2);
-    if (id === 7) { r('#dad3c6', 0, 0, 4, 22); r('#fff9ed', 28, 0, 4, 22); }
+  if (id === 7) {
+    // A continuous vertical wall, rather than a horizontal skirting tile repeated down a column.
+    r('#ece8df', 0, 0, 32, 32);
+    r('#faf8f1', 0, 0, 4, 32); r('#cbc9bf', 28, 0, 4, 32);
+    return;
+  }
+  if ([6, 8, 29, 30].includes(id)) {
+    r('#ece8df', 0, 0, 32, 32); r('#faf8f1', 0, 0, 32, 4);
+    r('#cbc9bf', 0, 28, 32, 4);
     if (id === 29) {
       r('#878f92', 1, 3, 30, 19); r('#d0e6e6', 3, 4, 26, 15);
       r('#b5d8db', 4, 5, 10, 12); r('#a0c8c9', 17, 5, 10, 12);

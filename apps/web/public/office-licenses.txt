@@ -1,13 +1,19 @@
-AI Pixel Company office visual pilot
+AI Pixel Company original office v3
 
-Reused code:
-  pixel-agents core/src/paletteUtils.ts
-  https://github.com/pixel-agents-hq/pixel-agents/blob/b1bafd02896d90d83457266575a1e8e5011ce997/core/src/paletteUtils.ts
-  Adapted with injectable randomness and input validation.
+Current artwork and presentation:
+  Tiles, furniture, characters and layout are original procedural AI Pixel
+  Company artwork dedicated to CC0-1.0. No downloaded images, external fonts,
+  paid asset packs or image-generation APIs are used.
+  Room names, employee labels and activity text are HTML.
+  The former pixel-agents palette adaptation has been removed from this version.
+
+Rendering dependency: Phaser 3.90.0
+  https://github.com/phaserjs/phaser
+  License below matches the installed Phaser distribution.
 
 MIT License
 
-Copyright (c) 2026 Pablo De Lucca
+Copyright (c) 2024 Richard Davey, Phaser Studio Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -27,11 +33,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Artwork:
-  Tiles, furniture, characters, rugs and office layout are original procedural
-  AI Pixel Company artwork dedicated to CC0-1.0. No upstream image assets,
-  MetroCity character pack, paid asset pack, fonts or external image API used.
-
-Visual reference:
-  pixel-agents office areas, furniture grouping and compact activity bubbles.
-  Phaser rendering and the AI Pixel Company server state contract are retained.
+The historical pixel-agents adaptation and its original MIT notice remain in
+the earlier Git revisions. No pixel-agents source code is bundled in this version.

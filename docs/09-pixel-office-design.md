@@ -1,5 +1,24 @@
 # 픽셀 사무실 설계
 
+## 현재 화면 — 2026-10-21
+
+사용자 피드백에 따라 `pixel-agents` 팔레트 선택 함수와 vendor 파일을 제거했다.
+직접 제작한 역할별 고정 색상·가구·캐릭터, Phaser와 기존 충돌/목표 좌표·서버 상태 계약은 유지한다.
+
+| 문제 | 변경 |
+|---|---|
+| 가로 벽 타일을 세로로 반복해 생긴 줄무늬 | 세로 전용 연속 벽으로 수정 |
+| 작은 Canvas 글자의 확대·축소 | 방·직원 이름은 HTML 레이어, 활동은 지도 아래 HTML 패널 |
+| 큰 화면의 과도한 확대·장식 겹침 | 그림 최대 896px, 추가 러그·광선·중복 캡션 제거 |
+| 모바일 이름표 겹침 | 지도에는 PM/DEV/QA, 아래 DOM 목록·상세에는 전체 이름/활동 |
+
+관련 단위·동기화 10개, 사무실 Chromium 8개와 lint/typecheck/build를 확인했다.
+브라우저에서 1440px/390px 이름표 범위·겹침·가로 넘침, 그래픽 토글 후 단일 레이어 정리를 검사했다.
+기존 실제 프로젝트를 읽기 전용으로 조회해 서버의 PM IDLE / Developer BLOCKED / QA IDLE을 대조했다.
+페이지 오류·업무 변경·외부 요청은 각각 0건이며 새 모델 호출·수락·merge·배포는 없다.
+과거 시범의 재사용 코드·말풍선 설명은 아래 날짜별 이력이며 현재 번들에는 해당 차용 코드가 없다.
+현재 고지는 `apps/web/public/office-licenses.txt`의 직접 제작 CC0 그래픽·Phaser MIT 범위를 따른다.
+
 ## Phase 2 실제 구현 — 2026-10-19
 
 Phaser3.90.0 client-only Canvas renderer·896×512/32px Tiled JSON·3직원·5공간을 구현했다. 기본 목표30fps, reduced-motion과 탭 비활성/연결 단절에서는 움직임을 멈춘다. 타일·3역할×7동작 sprite atlas는 직접 작성한 procedural pixel art이며 CC0-1.0이다. 외부 이미지/폰트는 사용하지 않는다. 원본/라이선스는 office-map.json properties와 office-art.ts에 기록한다. Phaser 의존성은 MIT다. 기존 지정 Phaser3를 유지하며 최신 기본 문서의 Phaser4 API와 구분해 버전 문서/실제 빌드를 검증했다.

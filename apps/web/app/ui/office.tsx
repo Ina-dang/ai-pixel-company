@@ -5,6 +5,7 @@ import type { OfficeAgent } from '@ai-pixel/contracts';
 import { formatTime } from './api';
 import { locationNames, officeRoles, roleNames, stateNames, validOfficeAgents } from './office-model';
 import type { createOfficeScene } from './office-scene';
+import { OFFICE_ROOM_LABELS } from './office-presentation';
 import './office.css';
 
 type SceneHandle = ReturnType<typeof createOfficeScene>;
@@ -80,9 +81,12 @@ export function PixelOffice({ projectId, agents: input, connection, syncedAt, on
       <small>{syncedAt ? `마지막 확인 ${formatTime(syncedAt)} KST` : '직원 상태를 확인하고 있습니다.'}</small>
     </div>
     <div className={`office-visual ${state === 'ready' ? 'is-ready' : ''}`}>
-      <div ref={mount} className="office-canvas" data-office-style="visual-pilot-v1" aria-hidden="true" />
+      <div className="office-plan">
+        <div ref={mount} className="office-canvas" data-office-style="original-v3" aria-hidden="true" />
+        {state === 'ready' && <div className="office-room-labels" aria-hidden="true">{OFFICE_ROOM_LABELS.map(room => <span className="office-room-label" key={room.name} style={{ left: `${room.x / 896 * 100}%`, top: `${room.y / 512 * 100}%` }}>{room.name}</span>)}</div>}
+      </div>
       {state !== 'ready' && <div className="office-fallback" role="status"><span className="office-fallback-mark" aria-hidden="true">▦</span><strong>{state === 'loading' ? '사무실 문을 여는 중…' : state === 'off' ? '직원 상태를 텍스트로 보고 있어요' : '직원 목록으로 계속 확인할 수 있어요'}</strong><p>{!hasAgents ? '서버의 직원 상태를 확인하고 있습니다.' : '업무 실행과 결과는 아래 직원 상세에서 확인하세요.'}</p>{state === 'fallback' && hasAgents && <button type="button" className="button secondary" onClick={() => setRetry(value => value + 1)}>그래픽 다시 불러오기</button>}</div>}
-      <div className="office-caption"><span>AI PIXEL COMPANY</span><span>직원을 선택하면 현재 작업을 볼 수 있어요</span><a href="/office-licenses.txt" target="_blank" rel="noopener noreferrer">오픈소스 고지</a></div>
+      <div className="office-caption"><span>직원 상태는 아래 목록에서도 확인할 수 있어요</span><a href="/office-licenses.txt" target="_blank" rel="noopener noreferrer">그래픽·라이선스</a></div>
     </div>
     {selected && <div className="office-selection-speech" role="note" aria-label="선택 직원 현재 활동"><strong className="office-selection-name">{selected.nameKo} · {stateNames[selected.state]}</strong><span className="office-selection-message">현재 작업 · {selected.activityKo}</span></div>}
     <fieldset className="office-team" aria-label="직원 목록">{officeRoles.map(role => {

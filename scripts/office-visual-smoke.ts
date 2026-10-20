@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 // Read-only live verification. No task creation, model invocation, acceptance or external write.
 const projectId = process.argv[2];
 assert(projectId && /^[0-9a-f-]{36}$/.test(projectId), 'Usage: office-visual-smoke.ts <existingProjectId>');
+const screenshotPrefix = process.argv.includes('--original') ? 'office-original-live' : 'office-pilot';
 process.env.PLAYWRIGHT_BROWSERS_PATH = resolve('.local/playwright');
 const { chromium, expect } = await import('@playwright/test');
 const browser = await chromium.launch({ headless: true });
@@ -32,12 +33,12 @@ try {
   const developer = snapshot.agents.find((agent: { role: string }) => agent.role === 'DEVELOPER');
   await expect(office.getByRole('note', { name: '선택 직원 현재 활동', exact: true })).toContainText(developer.activityKo);
   mkdirSync('test-results', { recursive: true });
-  await office.screenshot({ path: 'test-results/office-pilot-desktop.png' });
+  await office.screenshot({ path: `test-results/${screenshotPrefix}-desktop.png` });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await expect(office).toHaveAttribute('data-office-state', 'ready');
-  await office.screenshot({ path: 'test-results/office-pilot-mobile.png' });
+  await office.screenshot({ path: `test-results/${screenshotPrefix}-mobile.png` });
   await office.getByRole('button', { name: '그래픽 끄기', exact: true }).click();
   await expect(office.locator('canvas')).toHaveCount(0);
   await office.getByRole('button', { name: '그래픽 켜기', exact: true }).click();
@@ -50,6 +51,6 @@ try {
     await expect(office.locator(`[data-office-agent="${agent.role}"]`)).toHaveAttribute('data-agent-state', agent.state);
   }
   assert.deepEqual(errors, []); assert.deepEqual(writes, []); assert.deepEqual(externalRequests, []);
-  console.log(JSON.stringify({ projectId, verified: true, readOnly: true, states: snapshot.agents.map((agent: { role: string; state: string }) => ({ role: agent.role, state: agent.state })), mobileWidth: 390, pageErrors: errors.length, businessWrites: writes.length, externalRequests: externalRequests.length, screenshots: ['test-results/office-pilot-desktop.png', 'test-results/office-pilot-mobile.png'] }));
+  console.log(JSON.stringify({ projectId, verified: true, readOnly: true, states: snapshot.agents.map((agent: { role: string; state: string }) => ({ role: agent.role, state: agent.state })), mobileWidth: 390, pageErrors: errors.length, businessWrites: writes.length, externalRequests: externalRequests.length, screenshots: [`test-results/${screenshotPrefix}-desktop.png`, `test-results/${screenshotPrefix}-mobile.png`] }));
   await context.close();
 } finally { await browser.close(); }
