@@ -1,5 +1,11 @@
 # 테스트·품질·에이전트 평가
 
+## Phase 5 실제 검증 범위 — 2026-10-20
+
+최종 자동223=기존206+T20 음성17, Chromium37=기존30+음성7, lint/typecheck·TS16/Python26 계약·build를 통과했다. 음성 동의/권한/CSRF·미준비/형식/한도·미확정 task0·수정/확인·source 위조/중복 거부·한도/점검·취소/만료/권한 철회·restore 격리·위험 승인/run0을 검사한다. 추가 경계 검증은 취소 중 전역 슬롯 유지, 파일 정리 불명 시 PROCESSING/차단, 실제 잘못된 native executable의 spawn 실패→close→임시 파일 삭제다. 브라우저는 명시적 동의·escaped 후보·수정 뒤 재확인·취소·거부된 마이크·mock track 해제·390px overflow0·30초 초과 무업로드를 검사한다. UI 대역은 실제 로그인 한도를 소비하지 않으며 실제 인증/STT/browser는 별도 opt-in live verifier에서 검사한다.
+
+라이브 검증은 설치된 오프라인 한국어 합성기로 만든 공개 문장→실제 native whisper.cpp→Owner API/DB→실제 Chromium decode/upload/수정 확인을 사용한다. 원문과 전사 차이를 그대로 남겨 정확도를 일반화하지 않는다. native 강제 취소/close·임시 WAV0·확인된 TODO/자동 run0·중복 task 없음과 전체 새 schema 백업/복원을 함께 확인한다. 물리 microphone/다른 OS/browser/noise·서버 강제 종료 뒤 raw file 자동 조정·운영 개인정보/metadata 정책은 미검증/미구현이다. 세부 Artifact와 source digest는 README. 실제 merge/운영 배포는 수행하지 않는다.
+
 ## P4-05/06 실제 검증 — 2026-10-20
 
 전체206=이전188+운영18, Chromium30=이전25+운영5, lint/typecheck·계약 TS16/Python26·build를 실행해 PASS를 기록했다. 계측/경보 dedupe·확인/회복·권한 철회·전송 UNKNOWN/429·점검/복원 격리·주기 lease recovery·SSE fanout/느린 소비자·기한/크기·암호 인증/경로 검사를 포함한다. 기본 테스트의 외부 공급자는 대역이며 실제 Slack 전송과 구분한다.

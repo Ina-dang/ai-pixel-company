@@ -2,7 +2,7 @@
 
 사무실 화면 시범(2026-10-19): Phaser·서버 상태 계약을 유지하며 MIT 팔레트 함수만 선별 재사용하고 원본 그래픽·가구·러그·말풍선을 개선했다. 당시 테스트141개·Chromium17개와 실제 서버 대조를 통과했고 사용자가 수락했다. 적용 범위·라이선스는 README와 09에 기록했다.
 
-최신성 체크: 2026-10-20. P4-05/06 로컬 운영 계측·경보/Slack outbox·암호화 백업·격리 복원·C 판정을 추가했다. 테스트206개·Chromium30개·TS16/Python26 계약·lint/typecheck/build와 실제 table44/workspace14 복원·DB/worker 장애·Slack 시험 전송2건을 확인했다. LOCAL_FIXTURE는 READY_FOR_OWNER_REVIEW/blocker0, 운영 C는 NO_GO다. off-host/운영 환경·host supervisor 분리·상시 ingress·일반 CI webhook 역순/철회·범용 저장소/언어·Phase 5는 남았다. 실제 merge/운영 배포/추가 유료 모델·인프라는 미수행이다. ADR-015·15장 runbook·README·체크리스트를 따른다.
+최신성 체크: 2026-10-20. 사용자 수락한 P4 로컬 검증에 이어 P5-01/02-L 로컬 한국어 STT 후보·수정/확인·공통 업무 등록을 구현했다. 자동223개·Chromium37개·TS16/Python26 계약·lint/typecheck/build, 실제 native STT/취소·raw 임시 파일0·브라우저·table45/workspace14 복원과 기존 GitHub/Slack 읽기 연동을 확인했다. 취소/정리 실패 중 슬롯 유지와 native close도 검증했다. LOCAL_FIXTURE는 READY_FOR_OWNER_REVIEW/blocker0, 운영 C는 NO_GO다. 물리 마이크·강제 종료 뒤 음성 자동 정리/운영 개인정보 정책·TTS/회의·모델 최적화와 기존 off-host/운영 환경·supervisor 분리·상시 ingress·일반 CI/범용 실행 검증은 남았다. 실제 merge/운영 배포/새 유료 자원은 미수행이다. ADR-015/016·15/20장·README·체크리스트를 따른다.
 
 | 파일 | 목적 | 상태 |
 |---|---|---|

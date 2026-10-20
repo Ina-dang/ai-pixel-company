@@ -1,5 +1,17 @@
 # API 계약
 
+## Phase 5 실제 음성 API — 2026-10-20
+
+| 경로 | 동작/검사 |
+|---|---|
+| GET `/api/v1/voice/status` | 로그인된 Owner용 준비/로컬 공급자·보관/고정 상한·UTC 사용량·busy·paidApiFallback=false |
+| POST `/api/v1/projects/:id/voice/candidates` | audio/wav, 최대960044byte; Origin/CSRF/Owner/동의 헤더/중복 키·project/maintenance·WAV/한도 검사 후202 후보 ID. 같은 key replay는 native 재실행 없음 |
+| GET `/api/v1/voice/candidates/:id` | 같은 organization/actor의 후보 조회; 만료 text 정리. READY만 text 반환 |
+| DELETE `/api/v1/voice/candidates/:id` | CSRF/중복 키·scope 검사, 미확인 후보 폐기·소유 native 취소/close·임시 WAV 삭제. 확정된 task 삭제/취소 API가 아님 |
+| POST `/api/v1/voice/candidates/:id/confirm` | JSON confirmed=true/expectedVersion/task(source=VOICE). 현재 후보·Owner/project·만료/점검을 검사하고 공통 task command로 TODO 생성; replay 같은 task 반환 |
+
+VOICE는 일반 task POST에서 거부한다. 음성만으로 run/merge/배포·결제·권한 승인하지 않으며 자연어 intent 실행 API는 없다. provider 미준비/한도/처리 불명은 유료 모델이나 자동 retry로 대체하지 않는다. 강제 종료 뒤 소유 native 종료가 불명인 PROCESSING은 자동 초기화하지 않는다. 오류/보관/OS 범위는20장과README를 따른다.
+
 ## P4-05/06 실제 운영 API — 2026-10-20
 
 `GET /health/live`는 process 가용성, `GET /health/ready`와 기존 `/health`는 DB·점검/격리 상태를 구분한다. 외부에 상세 자격 증명/의존성 오류를 노출하지 않는다. 아래 `/api/v1` 경로는 기존 Owner 세션을 요구하고 모든 POST는 Origin/CSRF/Idempotency-Key를 검사한다.

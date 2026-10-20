@@ -5,10 +5,10 @@ import type postgres from 'postgres';
 import { emit, type TaskRow } from './repository.js';
 import { ApiError, digest } from './security.js';
 
-/** Shared web/Slack task command. The caller owns the organization lock and deduplication. */
-export async function createTaskCommand(tx: Transaction, actor: { organizationId: string; userId: string }, projectId: string, value: unknown) {
+/** Shared task command. Only the confirmed voice route can enable VOICE. */
+export async function createTaskCommand(tx: Transaction, actor: { organizationId: string; userId: string }, projectId: string, value: unknown, confirmedVoice = false) {
   const parsed = createTaskSchema.safeParse(value);
-  if (!parsed.success || !['TEXT', 'SLACK'].includes(parsed.data.source)) throw new ApiError(400, 'INVALID_INPUT', '업무 입력 내용을 확인하세요.');
+  if (!parsed.success || !['TEXT', 'SLACK', ...(confirmedVoice ? ['VOICE'] : [])].includes(parsed.data.source)) throw new ApiError(400, 'INVALID_INPUT', '업무 입력 내용을 확인하세요.');
   const input = parsed.data;
   const exists = await tx`select 1 from projects where id=${projectId} and organization_id=${actor.organizationId} and status='ACTIVE'`;
   if (!exists.length) throw new ApiError(404, 'NOT_FOUND', '프로젝트를 찾을 수 없습니다.');

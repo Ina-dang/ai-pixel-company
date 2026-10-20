@@ -4,13 +4,34 @@
 
 자연어 업무 지시를 PM·Developer·QA AI의 실제 개발 작업으로 연결하고, 검증된 실행 상태를 픽셀 사무실에 표시하는 AI 회사 운영 플랫폼이다.
 
-**현재 상태: Phase 4 직원 평가·다중 프로젝트에 이어 로컬 운영 계측/경보·고정 Slack 알림·암호화 백업·격리 복원·C 판정을 구현했다. 로컬 제한 fixture는 READY_FOR_OWNER_REVIEW, 운영 C는 NO_GO다. 실제 merge·운영 배포는 미수행이다. 코드 실행은 제한된 Node 함수 fixture이며 off-host 복구·운영 환경/권한 분리·상시 ingress·범용 저장소/언어 검증은 남았다.**
+**현재 상태: Phase 4 운영 경보/복원에 이어 Phase 5 로컬 한국어 음성 후보→수정/확인→기존 업무 등록을 구현했다. 로컬 제한 fixture는 READY_FOR_OWNER_REVIEW, 운영 C는 NO_GO다. 실제 merge·운영 배포는 미수행이다. 물리 마이크·강제 종료 뒤 음성 자동 정리·TTS/회의·자동 모델 최적화와 기존 off-host/운영 환경·권한 분리·상시 ingress·범용 실행 검증은 남았다.**
 
 - B단계: Phase 0 기반 → Phase 1 실제 AI 실행 → Phase 2 픽셀 사무실.
 - C단계: Phase 3 GitHub·Slack·채용 → Phase 4 평가·다중 프로젝트·운영.
-- Phase 5: 음성 명령과 고급 조직·모델 최적화. 초기 출시 필수 범위가 아니다.
+- Phase 5: 로컬 음성 후보·확인 입력 구현. TTS·회의/추가 연동·자동 모델 최적화는 보류하며 초기 출시 필수 범위가 아니다.
 
 문서 탐색은 [전체 목차](docs/INDEX.md), 개발 원칙은 [프로젝트 지침](docs/PROJECT_INSTRUCTIONS.md)과 [AGENTS.md](AGENTS.md)를 따른다. 구현 순서는 [로드맵](docs/13-development-roadmap.md), 착수 조건과 검증 결과는 [구현 체크리스트](docs/IMPLEMENTATION_CHECKLIST.md)를 참조한다.
+
+## Phase 5 로컬 음성 구현·실제 검증 — 2026-10-20
+
+✅ P5-01/02-L: `whisper.cpp b5454` Windows x64 CPU + 다국어 tiny 모델을 공식 hash 검증 후 Git 제외 로컬 폴더에 설치했다. 마이크/음성 파일의 로컬 전사 후보를 수정·확인한 뒤 TEXT/SLACK과 같은 서버 task command로 TODO를 생성한다. 원시 음성의 외부 STT 전송·유료 API fallback·자동 retry/모델 전환은 없다. 0.25~30초 canonical WAV(최대960044byte), 동시1, 조직당 UTC일20회, native60초 제한·Owner/CSRF/Origin/동의·중복/version·취소/만료·restore 격리를 적용했다. 상세 설계·공식 배포/라이선스 링크는 [20장](docs/20-voice-command-design.md)·ADR-016이다.
+
+| 실제 검증 | 결과/근거 |
+|---|---|
+| 최종 전체 검증 | `pnpm verify:release`: lint/typecheck·TS16/Python26 계약·자동223=기존206+음성17·build PASS, Chromium37=기존30+음성7 PASS. 취소 중 슬롯 유지·정리 실패 차단·실제 native spawn 실패/close 후 삭제 회귀 포함 |
+| 로컬 STT·API/DB | 공개 한국어 문장을 설치된 오프라인 Microsoft Heami로 합성→실제 native 모델→후보→한국어 수정/확인. task `bee32001-f751-4364-a53c-c54268398ef5`, 수정 감사·확인 원문·source VOICE·TODO·중복 task 없음·run0 |
+| 실제 오인식 | 입력 “로그인 화면의 제목을 수정해 주세요.” → API 전사 “로그인 화면에 제목을 수정해 주세요.”, browser 전사 “로그인 화면에 제 목을 수정해 주세요.”. exact match는 false이며 정확도로 일반화하지 않음 |
+| native 취소·삭제 | 후보 `0b06dba9-91d0-4550-9893-7698970794ab`: 실제30초 합성 WAV 처리 중 취소→native close/VOICE_NATIVE_CANCELLED·CANCELLED·후보 plaintext null·임시 음성 폴더0. 요청 중에는 PROCESSING 슬롯 유지, cleanup 불명은 후속 전사 차단 |
+| 실제 Chromium 연동 | 실제 decode/upload→전사 후보 표시→수정·확인. task `31ad0c6f-28ce-465a-99e6-eef082990ea3`, source VOICE/TODO/run0. desktop1440·mobile390, 가로 overflow0·pageErrors0. 최종 시험 project `91940f99-6121-4c7d-9575-12125efca823`와 앞선 두 시험 project는 archive하여 활성 목록에서 제외 |
+| 새 schema 백업·복원 | backup `343eb89a-8fbb-4735-8218-b054e7c84a87`, AES-256-GCM513234byte, SHA-256 `bf0ebef04813310e3ebb392439439386450952e2047b97103b80edf537a365fe`. restore `713a9324-80ac-4989-b65a-7fbd98f31bc7`: **45table·14workspace 내용/해시 일치**, 실제 시험 PG 재시작·state 보존·quarantine·외부 dispatch0, 측정6953ms. 원본 DB 교체/중단 없음 |
+| 운영 회귀·외부 연결 | 실제 비과금 fixture native worker 강제 종료→lease 만료→BLOCKED/RECOVERY_REQUIRED, replay0. loopback100읽기/동시4 p95=정렬95번째=9ms(로컬 조건). GitHub 시험 저장소/Slack 기존 identity 읽기 전용 재확인, 새 Slack 메시지/공개 tunnel/모델 API 호출0 |
+| 최종 판정·정리 | 같은 source digest의5검증 PASS, runtime digest 재확인 후 LOCAL_FIXTURE=READY_FOR_OWNER_REVIEW/blocker0, 운영 C=NO_GO. API 재시작 때 SSE/me의 일시적 reset/refused 로그를 보존했고 실제 Owner browser/SSE200/pageErrors0 재접속을 확인. 임시 복구 container/network/volume·test DB·원시 음성 폴더 잔여0, active operations/voice/run0 |
+
+최종 source digest: `a56212c0fe373aa2961dea876b84ad2d21dfe234bd536f50abadb45607f5c5da`. 불변 검증 Artifact는 `.local/operations-evidence/<id>.json`에 보관한다: 자동 `726b1907-dbc0-4ff9-b0da-08621ea22dd3`, browser `9db109b8-e895-49d8-b600-3a6af4ae9c94`, 복구 `07a2eef6-0df3-4324-9639-50eca92e07d8`, 부하 `086bfc8b-d4b0-4ff6-a9df-810795a9235c`, 외부 `581d0d41-a8d5-45a8-96d0-d50d7dc023ce`.
+
+실제 STT proof `.local/voice-evidence/live.json`/SHA `7f74a52e9259e9565be79ad7ae966c42a722dbe173994ff96889ec2be4b1b822`, browser proof `browser.json`/SHA `b72ba407eb6cc0bb939fd50a6561f7db4dbdfaa875fd98b31307eb6e566a6819`, 실제 화면 `voice-live-desktop.png`/`voice-live-mobile.png`도 같은 폴더다. 실행 파일/모델/라이선스/음성 fixture와 비밀·encrypted backup/key는 Git 제외다. 보관한 음성 fixture는 공개 합성 문장이고 실제 사용자 녹음이 아니다.
+
+⚠️ 실패/한계: 첫 전체 browser는 기존 승인 checkbox 선택자와 실제 로그인 횟수 의존성 때문에 실패했다(`803cfa89-36d6-436d-ada1-816cf9bf3d32` FAIL 이력 유지). 선택자를 범위화하고 음성 UI 읽기를 대역화한 두 차례 QA 수정 뒤 전체37개 PASS다. 직후 live 로그인429는 전사 시작 전에 차단됐으며 제한을 완화하지 않고60초 대기 후 한 차례 이어서 성공했다. 이후 경계 리뷰에서 취소 중 슬롯 유지·정리 불명 차단·error/close 구분을 보완했고 finally 내 throw lint 실패(`bc37934e-c152-4c69-a359-ef3d8d73e696`)도 보존했다. 최종223/37과 실제 연동을 같은 최종 digest로 다시 통과했다. 물리 마이크/다른 OS·브라우저/noise/장문, 강제 서버 종료 뒤 native/잔여 WAV 자동 조정, 운영 개인정보/metadata 정책은 미검증이다. 정상 처리/취소/정상 종료와 강제 종료를 같은 보장으로 취급하지 않는다. TTS/회의·자동 모델 최적화는 별도 요구/품질 근거 전 보류한다. 새 유료 자원·추가 모델 API 호출·실제 merge·운영 배포는 없으며 CPU/전력/통신 총 비용과 계정 청구액은 측정하지 않았다.
 
 ## 설계의 기준
 
@@ -76,10 +97,10 @@ GitHub App의 저장소 범위와 Slack의 workspace/channel/Owner 매핑은 서
 |---|---|
 | `pnpm lint` | 통과, 오류·경고 없음 |
 | `pnpm typecheck` | 7개 workspace 및 테스트/스크립트 통과 |
-| `pnpm test` | 206개 = Phase 3 158 + Phase 4 핵심30 + 운영18. 실제 PostgreSQL·제어된 공급자 시험과 실제 opt-in 연동을 구분 |
+| `pnpm test` | 223개 = 기존206 + 음성17. 실제 PostgreSQL·제어된 공급자 시험과 실제 opt-in STT/기존 연동을 구분 |
 | `pnpm verify:contracts` | TypeScript fixture 16개·Python JSON Schema fixture 26개 통과 |
 | `pnpm build` | Next 프로덕션 빌드·API/공유 패키지 타입 빌드 통과 |
-| `pnpm test:e2e` | Chromium30개 = 이전25 + 운영5. 경보 확인/회복 구분·별도 백업/복원 동의·알림 정책·stale/격리·390px/키보드와 전체 회귀 |
+| `pnpm test:e2e` | Chromium37개 = 기존30 + 음성7. 기존 사무실/승인/운영 회귀와 음성 동의·후보/수정 확인·취소·거부/track 해제·390px·길이 제한 |
 | `pnpm verify:agents` | Phase 1 실제 구독 PM/Developer/QA, 코드·추가 테스트 파일 수정, test/build exit0, QA PASS. 저장된 실행 수동 재개 성공, 아래 최종 결과는 사용자 지시로 수락 |
 | `pnpm verify:office-live` | 실제 Codex→브라우저 PM 작업/Developer 작업/QA 검토 관측, 동일 SHA test/build0·QA PASS, reload/390px·page error0. 새 결과는 수락 대기 |
 | `pnpm verify:staffing-live` | 실제 신규 Developer 채용/배정·Codex 코드 수정·Docker test/build0·동일 SHA QA PASS, 이름/reload/390px/page error0 확인. Owner 수락 대기 |

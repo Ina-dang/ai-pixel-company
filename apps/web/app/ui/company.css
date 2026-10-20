@@ -16,3 +16,8 @@
 .review-revision{border-top:1px solid var(--border);padding:12px 0}.review-decision{border-top:1px solid var(--border);margin-top:16px;padding-top:16px}
 .review-decision>.button,.review-decision>.text-button{margin-right:10px}.company-workspace li,.employee-reviews li{font-size:12px;overflow-wrap:anywhere}
 @media(max-width:600px){.review-scores{grid-template-columns:repeat(2,minmax(0,1fr))}.company-form,.company-policy,.review-card{padding:12px}.review-facts{grid-template-columns:1fr}.review-facts dd{margin-bottom:8px}}
+.voice-input { min-inline-size: 0; margin: 0; padding: 1rem; border: 1px solid var(--border, #d9e1e8); border-radius: 12px; }
+.voice-input legend { font-weight: 700; padding-inline: .4rem; }
+.voice-input .form-actions { flex-wrap: wrap; gap: .75rem; }
+.voice-input .field { min-width: 0; max-width: 100%; }
+.voice-input input[type="file"] { width: 100%; min-width: 0; max-width: 100%; }

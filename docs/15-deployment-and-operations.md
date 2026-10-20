@@ -1,5 +1,13 @@
 # 개발 환경·운영·장애 복구
 
+## Phase 5 로컬 음성 운영 — 2026-10-20
+
+`pnpm setup:voice`는 Windows x64에만 설치하며 공식 archive/model hash를 검증한다. `.local/voice-runtime`의 기존 manifest가 정상이라면 재다운로드 없이 재검증한다. 불완전/변조된 설치는 자동 복구/덮어쓰기하지 않는다. manifest/executable/DLL/model·라이선스는 Git 제외 로컬 파일이다. provider 미준비 상태에서도 텍스트 업무 등록이 가능하다.
+
+일반 처리/취소/정상 서버 종료는 native close 뒤 `.local/voice-temp/<candidate UUID>/audio.wav`를 지운다. 강제 서버 종료의 native 종료 불명과 잔여 WAV는 자동 정리로 성공 처리하지 않는다. 같은 executable·UUID input path·PID/실행 시각을 운영자가 확인하고 종료/파일 삭제를 별도 조정하기 전 PROCESSING을 임의 READY/FAILED로 초기화하거나 새 STT를 시작하지 않는다. 현재 단일 처리 DB 제약이 후속 전사를 차단한다. host supervisor 자동 조정과 crash 이후 원시 음성 정리는 미검증이며 운영 C 제한에 포함한다.
+
+백업은 voice 후보 metadata/text가 포함된 DB를 기존 방식으로 암호화하지만 원시 음성 임시 폴더와 모델 파일은 workspace backup 대상이 아니다. restore quarantine는 READY/PROCESSING 후보 text를 지우고 CANCELLED/RESTORE_QUARANTINE으로 바꾼다. off-host 복구 때 모델은 공식 pinned setup으로 다시 설치/대조해야 한다. 개인정보 보관 정책/OS 권한 분리·다른 OS/물리 microphone 시험을 로컬 시험으로 대체하지 않는다.20장·ADR-016·README의 실제 근거를 따른다.
+
 ## Phase 4 실제 운영 구현 — 2026-10-20
 
 아래 초기 후보 설계와 현재 구현을 구분한다. 활성 경로는 Hono API·PostgreSQL 큐·Codex 구독 worker·Docker Sandbox다. Redis/Python Engine은 ADR-011 이후 활성 경로가 아니므로 이번 복구 시험에서 해당 프로세스를 실행했다고 표시하지 않는다. 운영 배포·실제 merge·새 유료 인프라는 수행하지 않았다.

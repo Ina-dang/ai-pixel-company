@@ -1,5 +1,9 @@
 # 데이터베이스 설계
 
+## Phase 5 음성 후보 저장 계약 — 2026-10-20
+
+`0010_voice_commands.sql`의 `voice_candidates`는 organization/project/actor/session·동의 버전·audio hash/길이·provider·상태/version·후보 text/hash·task/수정 여부/confirmedAt을 연결한다. raw audio column은 없다. PROCESSING 전역 unique index로 로컬 native 전사를1개로 제한하고 조직/UTC일 count로20회 한도를 집행한다. READY text만 후보에 보관하며 확인/취소/만료/복원 격리 때 null로 바꾼다. 확인된 원문은 기존 tasks에 source=VOICE로 보존한다. task/run/승인 상태를 후보와 혼용하지 않는다. `idempotency_keys`의 업로드 응답에는 ID/PROCESSING만 저장해 원시 전사를 복제하지 않는다. 감사 metadata의 운영 보관 기간은 미확정이며 해시를 익명화로 간주하지 않는다. 상세는20장·ADR-016.
+
 ## P4-05/06 운영 저장 계약 — 2026-10-20
 
 Migration0009는 `operations_controls`, `operations_snapshots`, `operations_alerts/events`, `operations_notification_policies/outbox`, `operations_jobs`, `operations_backups`, `operations_release_checks`를 추가한다. 기존 domain 행/이력을 삭제하지 않는다. controls는 단조 version·LIVE/RESTORE_QUARANTINE·점검 token, alerts는 원인별 활성 episode 유일성, outbox는 event 유일성과 최대3회/UNKNOWN, jobs는 단일 active/UNKNOWN gate를 사용한다. 경보/출시 검증 이력은 update/delete를 금지한다.

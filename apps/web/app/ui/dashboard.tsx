@@ -8,6 +8,7 @@ import {
 import { PixelOffice } from './office';
 import { CollaborationWorkspace } from './collaboration';
 import { chooseSnapshot, ProjectEventGate } from './office-model';
+import { VoiceInput, type VoiceCandidate } from './voice-input';
 
 type Submission = { body: string; key: string } | null;
 
@@ -475,6 +476,11 @@ function RoleResult({ evidence }: { evidence: RoleEvidence }) {
 }
 
 function TaskForm({ projectId, session, onCreated, onError }: { projectId: string; session: Session; onCreated: (task: Task) => Promise<void>; onError: (error: unknown) => void }) {
+  const [voiceCandidate, setVoiceCandidate] = useState<VoiceCandidate | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceConfirmed, setVoiceConfirmed] = useState(false);
+  const [voiceReset, setVoiceReset] = useState(0);
+  useEffect(() => { if (projectId) { setVoiceCandidate(null); setVoiceConfirmed(false); setVoiceBusy(false); } }, [projectId]);
   const [title, setTitle] = useState("");
   const [command, setCommand] = useState("");
   const [criteria, setCriteria] = useState("");
@@ -483,24 +489,29 @@ function TaskForm({ projectId, session, onCreated, onError }: { projectId: strin
   const submission = useRef<Submission>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || voiceBusy) return;
+    if (voiceCandidate && !voiceConfirmed) { setNotice('전사 내용을 수정·확인한 뒤 확인란을 선택해 주세요.'); return; }
     const acceptanceCriteria = criteria.split("\n").map(line => line.trim()).filter(Boolean).map((descriptionKo, index) => ({ id: `AC-${index + 1}`, descriptionKo, method: "manual", required: true }));
     if (acceptanceCriteria.length === 0) { setNotice("수용 기준을 한 개 이상 입력해 주세요."); return; }
     setBusy(true); setNotice("");
     try {
-      const task = await api<Task>(`/projects/${encodeURIComponent(projectId)}/tasks`, submissionOptions({ title, commandOriginalKo: command, source: "TEXT", priority: "MEDIUM", acceptanceCriteria }, submission), session.csrfToken);
+      const input = { title, commandOriginalKo: command, source: voiceCandidate ? 'VOICE' : 'TEXT', priority: 'MEDIUM', acceptanceCriteria };
+      const task = await api<Task>(voiceCandidate ? `/voice/candidates/${voiceCandidate.id}/confirm` : `/projects/${encodeURIComponent(projectId)}/tasks`, submissionOptions(voiceCandidate ? { task: input, confirmed: true, expectedVersion: voiceCandidate.version } : input, submission), session.csrfToken);
       submission.current = null;
       setTitle(""); setCommand(""); setCriteria(""); setNotice("업무를 등록했습니다. 업무 상세에서 실행 범위를 확인해 주세요.");
+      setVoiceCandidate(null); setVoiceConfirmed(false); setVoiceReset(value => value + 1);
       await onCreated(task);
     } catch (failure) { onError(failure); }
     finally { setBusy(false); }
   }
   return <section className="panel task-form-panel" aria-labelledby="task-form-title"><div className="section-heading"><div><span className="eyebrow">NEW TASK</span><h2 id="task-form-title">새 업무 등록</h2></div><span className="subtle-tag">한국어 원문 보존</span></div><form className="stack-form" onSubmit={submit}>
-    <div className="field"><label htmlFor="task-title">업무 제목</label><input id="task-title" value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} placeholder="어떤 업무를 준비할까요?" /></div>
-    <div className="field"><label htmlFor="task-command">한국어 요청 원문</label><textarea id="task-command" value={command} onChange={event => setCommand(event.target.value)} required maxLength={10000} rows={3} aria-describedby="command-help" placeholder="목표와 필요한 작업을 구체적으로 알려 주세요." /><small id="command-help">입력한 요청은 원문 그대로 서버에 저장됩니다.</small></div>
-    <div className="field"><label htmlFor="task-criteria">수용 기준</label><textarea id="task-criteria" value={criteria} onChange={event => setCriteria(event.target.value)} required maxLength={10000} rows={3} aria-describedby="criteria-help" placeholder="예: 새로고침 후에도 입력한 설정이 유지된다" /><small id="criteria-help">줄마다 하나의 기준을 입력하세요. 등록 순서대로 AC ID가 부여됩니다.</small></div>
+    <VoiceInput key={`${projectId}-${voiceReset}`} projectId={projectId} session={session} onBusy={setVoiceBusy} onCandidate={candidate => { setVoiceCandidate(candidate); setVoiceConfirmed(false); setCommand(candidate?.transcript ?? ''); submission.current = null; }} />
+    <div className="field"><label htmlFor="task-title">업무 제목</label><input id="task-title" value={title} onChange={event => { setTitle(event.target.value); setVoiceConfirmed(false); }} required maxLength={200} placeholder="어떤 업무를 준비할까요?" /></div>
+    <div className="field"><label htmlFor="task-command">한국어 요청 원문</label><textarea id="task-command" value={command} onChange={event => { setCommand(event.target.value); setVoiceConfirmed(false); }} required maxLength={10000} rows={3} aria-describedby="command-help" placeholder="목표와 필요한 작업을 구체적으로 알려 주세요." /><small id="command-help">입력한 요청은 원문 그대로 서버에 저장됩니다.</small></div>
+    <div className="field"><label htmlFor="task-criteria">수용 기준</label><textarea id="task-criteria" value={criteria} onChange={event => { setCriteria(event.target.value); setVoiceConfirmed(false); }} required maxLength={10000} rows={3} aria-describedby="criteria-help" placeholder="예: 새로고침 후에도 입력한 설정이 유지된다" /><small id="criteria-help">줄마다 하나의 기준을 입력하세요. 등록 순서대로 AC ID가 부여됩니다.</small></div>
     {notice && <p className="form-notice" role="status">{notice}</p>}
-    <div className="form-actions"><span>등록 후 상태: 대기</span><button type="submit" className="button primary" disabled={busy}>{busy ? "업무 저장 중…" : "업무 등록"}</button></div>
+    {voiceCandidate && <label className="acceptance-check"><input type="checkbox" checked={voiceConfirmed} onChange={event => setVoiceConfirmed(event.target.checked)} /><span>프로젝트와 전사 수정 내용·수용 기준을 확인했습니다. 이 내용으로 업무를 등록합니다.</span></label>}
+    <div className="form-actions"><span>등록 후 상태: 대기{voiceCandidate ? ' · 음성 전사 확인 필요' : ''}</span><button type="submit" className="button primary" disabled={busy || voiceBusy || Boolean(voiceCandidate && !voiceConfirmed)}>{busy ? "업무 저장 중…" : "업무 등록"}</button></div>
   </form></section>;
 }
 

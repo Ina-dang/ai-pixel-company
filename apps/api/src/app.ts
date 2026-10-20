@@ -31,6 +31,7 @@ import { ReviewService } from './reviews.js';
 import {OperationsService} from './operations.js';
 import {maintenanceReason} from './maintenance.js';
 import {routeLabel} from './operations-model.js';
+import { VoiceService } from './voice.js';
 
 export { initializeOwner, transitionTaskForVerification } from './repository.js';
 export type { ApiConfig } from './security.js';
@@ -83,7 +84,7 @@ function nextPage(row: { id: string; cursor_time: string } | undefined) {
   return row ? Buffer.from(JSON.stringify({ id: row.id, createdAt: row.cursor_time })).toString('base64url') : null;
 }
 
-export function createApp({ database, config, workflowProvider, integrations, reviews, operations,structuredLogs=false }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService; reviews?: ReviewService; operations?:OperationsService;structuredLogs?:boolean }) {
+export function createApp({ database, config, workflowProvider, integrations, reviews, operations,voice,structuredLogs=false }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService; reviews?: ReviewService; operations?:OperationsService;voice?:VoiceService;structuredLogs?:boolean }) {
   const app = new Hono<ApiEnv>();
   const integrationService = integrations ?? new IntegrationService(database, fileURLToPath(new URL('../../../', import.meta.url)));
   const operationService=operations??new OperationsService(database,fileURLToPath(new URL('../../../',import.meta.url)));
@@ -102,7 +103,7 @@ export function createApp({ database, config, workflowProvider, integrations, re
     const ms=performance.now()-started;operationService.metrics.record(c.req.path,c.res.status,ms);
     if(structuredLogs)console.log(JSON.stringify({level:'info',requestId:c.get('requestId'),method:c.req.method,route:routeLabel(c.req.path),status:c.res.status,durationMs:Math.round(ms)}));
   });
-  app.use('/api/*', bodyLimit({ maxSize: 65_536, onError: () => { throw new ApiError(413, 'INVALID_INPUT', '요청 크기가 너무 큽니다.'); } }));
+  app.use('/api/*', async (c, next) => bodyLimit({ maxSize: c.req.method === 'POST' && /^\/api\/v1\/projects\/[a-f0-9-]{36}\/voice\/candidates$/.test(c.req.path) ? 960_044 : 65_536, onError: () => { throw new ApiError(413, 'INVALID_INPUT', '요청 크기가 너무 큽니다.'); } })(c, next));
 
   app.onError((error, c) => {
     const known = error instanceof ApiError;
@@ -178,6 +179,7 @@ export function createApp({ database, config, workflowProvider, integrations, re
   app.route('/api/v1', projectOperationsRoutes(database, workflowProvider));
   app.route('/api/v1', (reviews ?? new ReviewService(database, workflowProvider)).routes());
   app.route('/api/v1',operationService.routes());
+  app.route('/api/v1',(voice ?? new VoiceService(database, fileURLToPath(new URL('../../../', import.meta.url)))).routes());
   app.delete('/api/v1/auth/session', async (c) => {
     const auth = c.get('auth');
     await database.sql.begin(async (tx) => {

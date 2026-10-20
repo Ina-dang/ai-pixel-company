@@ -132,7 +132,7 @@ test('missing or stale verification keeps owner acceptance disabled', async ({ p
   const state = await mockWorkflow(page, pending);
   await loginAndSelect(page);
   await expect(page.getByRole('button', { name: '표시한 SHA 결과 수락', exact: true })).toBeDisabled();
-  await expect(page.getByRole('checkbox')).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: /후보 SHA .*의 결과를 확인했습니다\./ })).toBeDisabled();
   await expect(page.getByText('동일 SHA의 테스트·빌드·QA PASS 근거가 부족하여 수락할 수 없습니다.', { exact: true })).toBeVisible();
   expect(state.requests).toEqual([]);
 });

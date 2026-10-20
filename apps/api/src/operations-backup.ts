@@ -112,5 +112,7 @@ export async function quarantineRestore(database:Database){
     await tx`update integration_inbox set reply_status='UNKNOWN',error_code='RESTORE_REMOTE_RECONCILIATION_REQUIRED' where reply_status in ('PENDING','SENDING')`;
     await tx`update operations_notification_outbox set status='UNKNOWN',error_code='RESTORE_REMOTE_RECONCILIATION_REQUIRED' where status in ('PENDING','SENDING','DEFERRED')`;
     await tx`update operations_notification_policies set enabled=false,version=version+1`;await tx`update operations_jobs set status='UNKNOWN',error_code='RESTORE_MANUAL_REVIEW_REQUIRED' where status in ('QUEUED','RUNNING')`;
+    // Older backups predate voice. A restored candidate is never replayed or exposed as live input.
+    if ((await tx`select to_regclass('public.voice_candidates') is not null as present`)[0].present) await tx`update voice_candidates set status='CANCELLED',transcript=null,error_code='RESTORE_QUARANTINE',version=version+1 where status in ('PROCESSING','READY')`;
   });
 }

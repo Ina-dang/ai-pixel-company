@@ -149,6 +149,16 @@
 - 영향/한계: 새로운 유료 모델/인프라는 없다. 로컬 API 내부 supervisor는 고정 명령·대상·Owner 권한을 검사하지만 운영용 독립 OS 권한 broker가 아니다. off-host 복구/운영 환경·RPO/RTO·상시 ingress·범용 실행/언어 비교·host supervisor 분리가 남아 운영 C는 NO_GO다. 실제 merge/운영 배포는 사용자 지시로 미수행이다.
 - 근거: migration0009, 07/08/14/15/16, README의 실행 ID·source digest·암호화 파일 SHA·검증 Artifact와 실제 브라우저 근거를 따른다.
 
+## ADR-016 — 로컬 한국어 STT 후보 확인과 공통 task command (2026-10-20)
+
+- 상태: Phase 5 로컬 음성 구현. ADR-011/015의 구독 실행·PG/Phaser·분리된 C gate를 유지한다. P5-03/04의 추가 모델·TTS·회의는 승인/검증된 구현 범위로 확대하지 않는다.
+- 결정: 공식 배포/모델 해시를 검증하는 whisper.cpp b5454/tiny 다국어 로컬 CPU 전사, 명시적 동의, 최대30초/동시1/UTC일20회/timeout60초를 사용한다. 음성 모델 다운로드만 외부 공개 자원을 읽는다. 외부 STT 전송/유료 API fallback/자동 재시도는 없다.
+- 권한: STT는 task가 아닌 별도 후보다. 확인/수정/만료/version·Owner/project/maintenance를 검사한 서버만 공통 task command로 TODO를 생성한다. source VOICE는 일반 task POST에서 거부하고 merge/운영 배포 승인이나 run을 자동 생성하지 않는다.
+- 개인정보/복구: native close 뒤 임시 WAV 삭제, track 해제, 후보1시간 만료/30초 정리, 확인/취소 plaintext 폐기와 수정 감사 연결. restore는 후보 격리/폐기. 강제 종료 시 native identity/잔여 WAV 자동 조정은 미검증이며 후속 STT를 막고 운영자 확인으로 남긴다. metadata 장기 보관 정책은 운영 검토 대상이다.
+- 대안/한계: 브라우저 원격 음성 인식의 공급자/보관 동작은 사용하지 않았다. tiny의 실제 시험은 조사/띄어쓰기 오류를 보여 정확도 일반화를 하지 않는다. 물리 마이크/다른 OS·브라우저·noise/장문·TTS·자동 최적화·운영 C는 미검증/미구현이다.
+- 근거: 0010 migration, voice provider/routes/UI, T20 시험과 README의 실제 전사/취소·browser·회귀 근거, 20장 공식 링크. 실행 파일/모델/개인 음성·비밀은 Git에 넣지 않는다.
+- 경계 보완: 취소 요청 중에는 PROCESSING/VOICE_CANCEL_REQUESTED로 native close/파일 정리를 기다리며 슬롯을 유지한다. error 이벤트만으로 종료를 가정하지 않는다. cleanup 불명은 PROCESSING/VOICE_CLEANUP_REQUIRED로 후속 전사와 cancel 초기화를 차단한다. 실제 native spawn 실패/close 정리와 두 경계 회귀를 포함해 최종 자동223·Chromium37을 검증한다.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

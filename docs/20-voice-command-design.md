@@ -1,5 +1,25 @@
 # 음성 명령 후속 설계
 
+## Phase 5 로컬 구현 — 2026-10-20
+
+P5-01과 P5-02의 정상 처리/취소 경로를 구현했다. 아래 초기 설계 중 provider 미선택/미구현이라는 표현은 초기 이력이며, 실제 구현 범위는 이 절과 ADR-016·README 검증 기록을 따른다. 운영 C 출시와 물리 마이크 정확도 검증은 별도다.
+
+- 공급자: 공식 `ggml-org/whisper.cpp`의 Windows x64 CPU 배포 `b5454`, 다국어 `tiny`. `-ng`, CPU thread2, 한국어 `ko`, shell 없는 고정 executable/인자를 사용한다. 모델/실행 파일은 `.local/voice-runtime`에 설치하며 런타임이 자동 다운로드/업그레이드하지 않는다. 공식 archive SHA-256과 model SHA-1을 설치 때 확인하고 manifest의 개별 executable/DLL/model SHA-256을 서비스 준비 때 대조한다. MIT license 원문 두 개도 설치한다.
+- 비용/전송: 외부 STT·TTS·유료 API fallback 경로가 없다. 모델 다운로드는 GitHub/Hugging Face, 실제 음성 처리는 이 컴퓨터에서 수행한다. 별도 서비스 요금은 예약하지 않으며 CPU/전력·통신 비용은 측정하지 않았다. 원격 공급자의 보관 정책을 로컬 처리에 적용한 것처럼 주장하지 않는다.
+- 상한: canonical PCM WAV 16kHz/mono/16bit, 0.25~30초, 최대960044bytes=44byte header+30000ms×32bytes/ms. 브라우저 원본은 최대2MiB, decode 뒤 30초 초과를 조용히 자르지 않고 거부한다. 동시 native 전사1건, 조직당 UTC 일자20회(실패/취소도 소비), native60초 timeout. 자동 재시도/다른 모델 전환은 없다.
+- 후보: Owner+Origin+CSRF+Idempotency-Key+`local-transcription-v1` 동의를 실제 API 경계에서 검사한다. `PROCESSING→READY→CONFIRMED`와 `CANCELLED/FAILED/EXPIRED`를 task/run과 분리한다. 원시 WAV는 비공개 UUID 임시 폴더에만 쓰고 native close 이후 finally에서 삭제한다. 브라우저 녹음은 stop/cancel/unmount에 모든 track을 중지한다. 사용자가 선택한 원본 파일은 앱 임시 파일과 별개다.
+- 텍스트: 후보는 생성1시간 뒤 만료하며, 서버의30초 주기 및 조회 때 정리한다(DB 장애 때 정리 지연 가능). 확인/취소 때 후보 plaintext를 없앤다. 확인한 한국어 문장은 task 원문으로 보존하고 candidate ID·해시·수정 여부·actor·동의·confirmedAt을 연결한다. 해시는 익명화 보장이 아니다. 감사 metadata의 장기 보관/삭제 정책은 운영 개인정보 검토에 남긴다.
+- 확인: 프로젝트·직원 이름/숫자/경로/수용 기준을 Owner가 확인한다. 문장 수정은 확인란을 해제한다. 확인 endpoint는 서버 candidate 상태/version/만료와 현재 Owner·project·maintenance를 재검사한 뒤 TEXT/SLACK과 같은 `createTaskCommand`를 호출한다. 일반 tasks endpoint로 VOICE source를 위조할 수 없다. 생성 상태는 TODO이며 run/merge/배포 승인 생성은 없다. 자연어 조회·중단 intent parser와 TTS·상시 청취/회의는 구현하지 않았다. 기존 UI 제어를 사용한다.
+- 복구: 격리 restore는 READY/PROCESSING 후보 plaintext를 폐기하고 CANCELLED/RESTORE_QUARANTINE으로 처리한다. 이전 schema의 backup도 table 존재 검사로 호환한다. 서버 강제 종료로 native 종료를 확인할 수 없는 PROCESSING은 자동 replay/초기화하지 않으며 단일 처리 제약으로 후속 STT를 막는다. 해당 UUID 임시 WAV와 process identity는 운영자가 확인해야 한다. 이 강제 종료 경로의 자동 조정/삭제는 미구현·미검증이다.
+
+API: `GET /api/v1/voice/status`, `POST /api/v1/projects/:id/voice/candidates`(audio/wav), `GET/DELETE /api/v1/voice/candidates/:id`, `POST /api/v1/voice/candidates/:id/confirm`(확인문·expectedVersion·task). raw audio나 transcript는 구조화 request 로그에 넣지 않는다.
+
+취소 요청은 `PROCESSING/VOICE_CANCEL_REQUESTED`로 전역 슬롯을 유지한다. native `close`와 임시 파일 정리가 끝나야 CANCELLED로 바꾸며, 파일 정리 실패는 `PROCESSING/VOICE_CLEANUP_REQUIRED`로 남겨 cancel replay로도 슬롯을 열지 않는다. native error 이벤트를 종료 근거로 쓰지 않는다. [Node child_process close 계약](https://nodejs.org/docs/latest-v22.x/api/child_process.html#event-close)(2026-10-20 열람, 공개 v22.23.3 문서/실행22.20.0)을 대조했고 실제 spawn 실패→close→파일 정리와 취소 중 차단을 시험했다.
+
+실행: `pnpm setup:voice`(이미 설치됐다면 hash 대조 후 재사용), `pnpm verify:voice-live`, `pnpm verify:voice-browser`. 실제 전사 시험은 Windows의 설치된 Microsoft Heami Desktop으로 만든 공개 시험 문장이다. 실제 마이크가 아니다. 브라우저 대역 시험의 마이크 거부/track 해제와 실제 STT 호출을 구분한다. 정확도/품질 일반화 근거가 부족해 P5-04 자동 모델 최적화는 도입하지 않는다. TTS·회의/추가 연동(P5-03)은 별도 요구가 없어 평가 후 보류한다.
+
+공식 확인 경로(2026-10-20 열람): [whisper.cpp README](https://github.com/ggml-org/whisper.cpp), [b5454 배포/해시](https://github.com/ggml-org/whisper.cpp/releases/tag/b5454), [모델 파일·SHA](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md), [Whisper MIT License](https://github.com/openai/whisper/blob/main/LICENSE). 최신 release tag는 v1.9.5였지만 설치는 Windows CPU asset이 공개된 b5454에 고정했다. 원격 문서별 최종 수정일은 별도 확정하지 않았다.
+
 ## 1. 목적
 
 안정된 텍스트 command 파이프라인에 음성을 추가한다. 음성 입력이 권한·승인을 우회하지 않게 한다.

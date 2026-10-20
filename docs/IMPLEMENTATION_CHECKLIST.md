@@ -1,10 +1,10 @@
 # 구현 체크리스트와 설계 감사
 
-최신성 체크: 2026-10-20 실제 로컬 운영·복원·C 판정 반영. 아래 2026-10-18 문서 감사는 초기 설계 이력이다.
+최신성 체크: 2026-10-20 실제 Phase 5 로컬 STT·브라우저·새 schema 복원 반영. 아래 2026-10-18 문서 감사는 초기 설계 이력이다.
 
 ## 현재 상태
 
-P4-01~04에 이어 P4-05와 P4-06의 로컬 운영/백업·복원·C 판정을 구현했다. 자동 시험206개·Chromium30개·TS16/Python26 계약·lint/typecheck/build, 실제 table44/workspace14 복원·DB/worker 장애·Slack 경보/회복 전송을 검증했다. LOCAL_FIXTURE는 READY_FOR_OWNER_REVIEW, 운영 C는 NO_GO다. off-host 복구·운영 환경/host supervisor 권한 분리·상시 ingress·일반 CI webhook 역순/철회·범용 저장소/언어는 남았다. 실제 merge·운영 배포·새 유료 자원 생성은 수행하지 않았다.
+P4 로컬 검증 수락 뒤 P5-01/02-L의 로컬 한국어 STT 후보·수정/확인·공통 task 등록을 구현했다. 자동223개·Chromium37개·TS16/Python26 계약·lint/typecheck/build, 실제 native STT·취소/임시 WAV 삭제·브라우저·table45/workspace14 복원과 취소/정리 실패·native close 경계를 검증했다. LOCAL_FIXTURE는 READY_FOR_OWNER_REVIEW, 운영 C는 NO_GO다. 물리 마이크·강제 종료 뒤 음성 자동 정리/운영 개인정보 정책·TTS/회의·자동 모델 최적화와 기존 off-host/운영 환경·host supervisor 분리·상시 ingress·일반 CI/범용 실행은 남았다. 실제 merge·운영 배포·새 유료 자원 생성은 수행하지 않았다.
 
 ## Phase 0 — Foundation
 
@@ -71,10 +71,13 @@ P4-01~04에 이어 P4-05와 P4-06의 로컬 운영/백업·복원·C 판정을 �
 
 ## Phase 5 — 후속 기능
 
-- [ ] P5-01 필요/가격/보관/provider 공식 근거 확인 후 STT 후보→확인→공통 command(T20).
-- [ ] P5-02 원시 음성 비저장/동의/삭제·상한·위험 별도 승인(T20).
-- [ ] P5-03 TTS·고급 조직/회의/추가 연동은 별도 요구사항으로 평가.
+- [x] P5-01 공식 배포/모델 hash·MIT 확인 후 로컬 whisper.cpp/tiny STT 후보→수정/확인→기존 공통 task command(T20). 일반 task POST의 VOICE 위조 거부·source/version/원문·수정 감사 연결.
+- [x] P5-02-L 정상 처리/취소의 임시 WAV 삭제·동의·만료·30초/동시1/UTC일20회/60초 timeout·권한 재검사·위험 별도 승인(T20). 실제 native 취소/close, 원시 파일0, 수정 확인 뒤 TODO/자동 run0 확인. 유료 fallback/자동 retry 없음.
+- [ ] P5-02-H 서버 강제 종료 뒤 native identity·잔여 WAV 자동 조정/삭제, 물리 microphone/다른 OS·브라우저·noise/장문과 운영 metadata 보관 정책. PROCESSING 종료 불명은 후속 STT 차단/운영자 확인으로 남김.
+- [x] P5-03 범위 평가: TTS·고급 조직/회의/추가 연동은 별도 요구가 없어 보류. 실제 구현/출시 완료 표시는 하지 않음.
 - [ ] P5-04 자동 모델/비용 최적화는 품질/성공률·rollback 근거 후 도입.
+
+2026-10-20: P5-01/02-L 로컬 구현. 최종 자동223=기존206+음성17, Chromium37=기존30+음성7과 lint/typecheck·TS16/Python26 계약·build PASS. 승인 체크박스 선택자와 UI 시험의 실제 로그인 의존성을 수정했고 첫 전체 browser FAIL 이력은 release_checks에 보존했다. 최종 경계 리뷰에서 취소 중 슬롯/cleanup 불명 차단·native error/close 구분도 보완·시험했다. 실제 물리 마이크가 아닌 로컬 한국어 합성 시험 문장을 사용한다. 최종 실제 source digest/후보·task/backup·restore·스크린샷은 README를 따른다. 운영 C·실제 merge/운영 배포는 이 통과로 승인되지 않는다.
 
 ## 문서 정합성 자체 감사
 
