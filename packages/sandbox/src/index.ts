@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse, resolve } from 'node:path';
+export { RepositorySandbox, loadRepositoryAdmission, HOW_TO_TRASH_URL, HOW_TO_TRASH_BASE_SHA, REPOSITORY_PATHS } from './repository.js';
 
 export interface WorkspaceFile { path: string; content: string }
 export interface WorkspaceSnapshot { files: WorkspaceFile[]; sha: string; diff: string }
@@ -63,7 +64,7 @@ async function assertNoLinks(path: string) {
   }
 }
 
-function command(args: string[], timeoutMs = 10_000, signal?: AbortSignal): Promise<{ exitCode: number; output: string }> {
+export function dockerCommand(args: string[], timeoutMs = 10_000, signal?: AbortSignal): Promise<{ exitCode: number; output: string }> {
   checkAbort(signal);
   return new Promise((fulfill, reject) => {
     const child = spawn('docker', args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -90,6 +91,7 @@ function command(args: string[], timeoutMs = 10_000, signal?: AbortSignal): Prom
     });
   });
 }
+const command = dockerCommand;
 
 export class DockerSandbox {
   readonly root: string;

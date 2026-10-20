@@ -358,7 +358,7 @@ function ProjectWorkspace({ project, session, onError, onSelectProject }: { proj
       <TaskForm projectId={project.id} session={session} onError={onError} onCreated={async task => { await reloadRef.current?.(); setSelectedTaskId(task.id); setRefreshKey(current => current + 1); }} />
     </div>
     {activeTask && <TaskDetailPanel key={`${activeTask.id}:${activeTask.version}:${refreshKey}`} task={activeTask} onError={onError} onClose={() => setSelectedTaskId("")} />}
-    {activeTask && <WorkflowPanel key={activeTask.id} task={activeTask} session={session} subscription={subscription} refreshKey={refreshKey} onError={onError} onChanged={() => { void reloadRef.current?.(); void checkSubscriptionRef.current?.(); }} />}
+    {activeTask && <WorkflowPanel key={activeTask.id} task={activeTask} project={project} session={session} subscription={subscription} refreshKey={refreshKey} onError={onError} onChanged={() => { void reloadRef.current?.(); void checkSubscriptionRef.current?.(); }} />}
     <section className="panel activity-panel" aria-labelledby="event-log-title"><div className="section-heading"><div><span className="eyebrow">ACTIVITY</span><h2 id="event-log-title">실시간 변경 기록</h2></div><span className="muted small">현재 연결에서 받은 최근 알림</span></div>{events.length === 0 ? <p className="inline-empty">아직 수신한 변경 알림이 없습니다. 업무의 저장 이력은 업무 상세에서 확인할 수 있습니다.</p> : <ol className="event-list">{events.map(entry => <li key={entry.eventId}><span className="event-dot" aria-hidden="true" /><strong>{eventLabels[entry.type] ?? entry.type}</strong><code>#{entry.sequence}</code><time dateTime={entry.timestamp}>{formatTime(entry.timestamp)} KST</time></li>)}</ol>}</section>
   </>;
 }
@@ -372,11 +372,13 @@ const runStatusLabels: Record<WorkflowRun["status"], string> = {
   WAITING_APPROVAL: "결과 수락 대기", SUCCEEDED: "실행 성공", FAILED: "실행 실패", CANCELLED: "취소됨",
 };
 
-function WorkflowPanel({ task, session, subscription, refreshKey, onError, onChanged }: {
-  task: Task; session: Session; subscription: SubscriptionState | null; refreshKey: number;
+function WorkflowPanel({ task, project, session, subscription, refreshKey, onError, onChanged }: {
+  task: Task; project: Project; session: Session; subscription: SubscriptionState | null; refreshKey: number;
   onError: (error: unknown) => void; onChanged: () => void;
 }) {
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
+  const realRepository = /^https:\/\/github\.com\/Ina-dang\/how-to-trash(?:\.git)?\/?$/.test(project.repositoryUrl);
+  const fixture = realRepository ? "how-to-trash-v1" : "node-functions-v1";
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
@@ -444,18 +446,20 @@ function WorkflowPanel({ task, session, subscription, refreshKey, onError, onCha
 
   return <section className="panel workflow-panel" aria-labelledby="workflow-title">
     <div className="section-heading"><div><span className="eyebrow">SUBSCRIPTION WORKFLOW</span><h2 id="workflow-title">AI 직원 실행</h2></div><span className="subtle-tag">PM → Developer → QA</span></div>
-    <p className="muted">Phase 1 검증 범위: 격리된 <code>node-functions-v1</code> 함수 라이브러리. 직원이 코드를 수정하면 샌드박스에서 테스트·빌드를 실행하고 같은 SHA를 QA가 검토합니다. 연결 저장소의 임의 코드는 실행하지 않습니다.</p>
+    <p className="muted">{realRepository ? "how-to-trash의 고정 기준 커밋에서 지역 목록·검색 관련 파일을 수정합니다. 네트워크 차단 샌드박스의 테스트·빌드 근거를 QA가 검토하며, 결과는 수락 대기에서 멈춥니다." : <>격리된 <code>node-functions-v1</code> 함수 검증입니다. 직원 수정 뒤 샌드박스의 테스트·빌드와 같은 SHA를 QA가 검토합니다.</>}</p>
     <ErrorNotice message={failure} />
     {!loaded && !failure && <p role="status">실행 기록을 불러오는 중입니다…</p>}
-    {loaded && (!latest || terminal) && <div className="workflow-actions"><button type="button" className="button primary" disabled={busy || !subscription?.ready || !["TODO", "FAILED"].includes(task.status)} onClick={() => void mutate(`/tasks/${encodeURIComponent(task.id)}/runs`, { fixture: "node-functions-v1" })}>{busy ? "실행 요청 중…" : "검증 업무 실행"}</button><span className="muted small">구독 상태와 서버 실행 조건을 통과해야 시작합니다.</span></div>}
+    {loaded && (!latest || terminal) && <div className="workflow-actions"><button type="button" className="button primary" disabled={busy || !subscription?.ready || !["TODO", "FAILED"].includes(task.status)} onClick={() => void mutate(`/tasks/${encodeURIComponent(task.id)}/runs`, { fixture })}>{busy ? "실행 요청 중…" : realRepository ? "실제 저장소 업무 실행" : "검증 업무 실행"}</button><span className="muted small">구독 상태와 서버 실행 조건을 통과해야 시작합니다.</span></div>}
     {latest && <>
       <div className="run-meta"><span className="status-badge">실행: {runStatusLabels[latest.status]}</span><span>현재 단계: {latest.checkpoint.stage}</span><span>업무: {task.statusLabelKo}</span><span>실행 버전 {latest.version}</span></div>
       <p className="muted small run-identifier">실행 ID <code>{latest.id}</code> · {formatTime(latest.updatedAt)} KST</p>
+      {latest.repositorySource && <p className="muted small">저장소: how-to-trash · 기준 커밋 <code>{latest.repositorySource.baseSha}</code> · 검증 결과는 아래 후보 SHA에 연결됩니다.</p>}
       {latest.checkpoint.stopReason && <p className="run-blocked" role="status">중단 사유: <code>{latest.checkpoint.stopReason}</code><br />조건을 해결한 후 한도를 확인하고 직접 재개해 주세요. 자동 재시도나 API 키 대체 실행은 하지 않습니다.</p>}
       {latest.stopping && <p role="status" className="muted small">진행 중인 직원 작업의 중단 확인을 기다리고 있습니다.</p>}
       {!terminal && latest.status !== "WAITING_APPROVAL" && <div className="workflow-actions">
         {["QUEUED", "RUNNING"].includes(latest.status) && <button className="button secondary" type="button" disabled={busy} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "pause", expectedVersion: latest.version })}>일시 정지 요청</button>}
         {canResume && <button className="button primary" type="button" disabled={busy || !subscription?.ready} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "resume", expectedVersion: latest.version })}>실행 재개</button>}
+        {realRepository && latest.status === "BLOCKED" && latest.checkpoint.stopReason === "DEVELOPER_CONTRACT_INVALID" && latest.checkpoint.verification && !latest.stopping && <button className="button secondary" type="button" disabled={busy || !subscription?.ready} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "reverify", expectedVersion: latest.version })}>같은 후보 다시 검증</button>}
       </div>}
       {!terminal && <div className="workflow-actions"><button className="button secondary" type="button" disabled={busy} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "cancel", expectedVersion: latest.version })}>실행 취소</button></div>}
       <div className="role-evidence-grid">{(["PM", "DEVELOPER", "QA"] as const).map(role => {

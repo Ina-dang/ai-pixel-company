@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { pinRunStaffing, readRunStaffing } from './staffing.js';
-import { ExecutionBlocked, type AgentProvider, type Checkpoint } from '@ai-pixel/agents';
+import { ExecutionBlocked, limits, loadRepositoryAdmission, HOW_TO_TRASH_URL, type AgentProvider, type Checkpoint, type RepositorySource } from '@ai-pixel/agents';
+import { fileURLToPath } from 'node:url';
 import { dependencyBlock, reserveExecution, settleExecution } from './execution-policy.js';
 import { idSchema } from '@ai-pixel/contracts';
 import type { Database, Transaction } from '@ai-pixel/db';
@@ -10,8 +11,8 @@ import { audit, emit, mutate } from './repository.js';
 import { type ApiEnv, ApiError } from './security.js';
 import { checkpointSchema, initialCheckpoint, jsonValue, publicWorkflow, recordWorkflow, type WorkflowRow, updateTaskForRun } from './workflows.js';
 
-const createSchema = z.strictObject({ fixture: z.literal('node-functions-v1') });
-const controlSchema = z.strictObject({ action: z.enum(['pause', 'resume', 'cancel']), expectedVersion: z.number().int().positive() });
+const createSchema = z.strictObject({ fixture: z.enum(['node-functions-v1', 'how-to-trash-v1']) });
+const controlSchema = z.strictObject({ action: z.enum(['pause', 'resume', 'cancel', 'reverify']), expectedVersion: z.number().int().positive(), verificationWindowMs: z.literal(300_000).optional() });
 const acceptSchema = z.strictObject({ candidateSha: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/), expectedVersion: z.number().int().positive() });
 function validId(value: string) {
   const result = idSchema.safeParse(value);
@@ -32,7 +33,7 @@ async function lockedRun(tx: Transaction, organizationId: string, id: string, ve
   if (rows[0].version !== version) throw new ApiError(409, 'VERSION_CONFLICT', '실행이 변경됐습니다. 새로고침하세요.');
   return rows[0];
 }
-function acceptable(checkpoint: Checkpoint, sha: string) {
+export function acceptable(checkpoint: Checkpoint, sha: string) {
   const verified = checkpoint.verification;
   const pm = checkpoint.roles.find((role) => role.role === 'PM');
   const developer = [...checkpoint.roles].reverse().find((role) => role.role === 'DEVELOPER');
@@ -46,7 +47,7 @@ function acceptable(checkpoint: Checkpoint, sha: string) {
     && qa?.candidateSha === sha && qa.output.candidateSha === sha && qa.output.verdict === 'PASS' && qa.output.issues.length === 0;
 }
 
-export function workflowRoutes(database: Database, provider?: AgentProvider) {
+export function workflowRoutes(database: Database, provider?: AgentProvider, admission = async (): Promise<RepositorySource> => (await loadRepositoryAdmission(fileURLToPath(new URL('../../../', import.meta.url)))).source) {
   const routes = new Hono<ApiEnv>();
   routes.get('/subscription', async (c) => c.json({ data: provider ? await provider.status() : {
     ready: false, reason: 'WORKER_NOT_CONFIGURED', authMode: 'unknown', billingMode: 'CHATGPT_SUBSCRIPTION', windows: [], checkedAt: new Date().toISOString(),
@@ -64,18 +65,26 @@ export function workflowRoutes(database: Database, provider?: AgentProvider) {
     const body = await input(c.req.raw, createSchema);
     const readiness = await provider?.status();
     if (!readiness?.ready) throw new ApiError(409, 'SUBSCRIPTION_UNAVAILABLE', 'Codex 구독 상태와 잔여 한도를 확인하세요.', { reason: readiness?.reason ?? 'WORKER_NOT_CONFIGURED' });
+    let source: RepositorySource | null = null;
+    if (body.fixture === 'how-to-trash-v1') {
+      try { source = await admission(); }
+      catch { throw new ApiError(409, 'REPOSITORY_NOT_PROVISIONED', '선택 저장소의 고정 의존성 이미지와 기준 커밋을 먼저 준비하세요.'); }
+    }
     return mutate(database, c, body, async (tx) => {
       const organizationId = c.get('auth').organizationId;
       const tasks = await tx<{ project_id: string; command_original_ko: string; status: string }[]>`select project_id,command_original_ko,status from tasks where organization_id=${organizationId} and id=${id} for update`;
       const task = tasks[0];
       if (!task) throw new ApiError(404, 'NOT_FOUND', '업무를 찾을 수 없습니다.');
+      const projects = await tx<{ repository_url: string }[]>`select repository_url from projects where organization_id=${organizationId} and id=${task.project_id} for share`;
+      const selected = projects[0]?.repository_url.replace(/\.git\/?$/, '').replace(/\/$/, '') === HOW_TO_TRASH_URL.replace(/\.git$/, '');
+      if (source && !selected || selected && !source) throw new ApiError(409, 'REPOSITORY_PROFILE_MISMATCH', '프로젝트 저장소와 실행 프로필이 일치하지 않습니다.');
       const dependency = await dependencyBlock(tx, organizationId, task.project_id, id);
       if (dependency) throw new ApiError(409, dependency, '프로젝트 상태와 선행 업무 완료를 확인하세요.');
       if (!['TODO', 'FAILED'].includes(task.status)) throw new ApiError(409, 'INVALID_TRANSITION', '대기 또는 실패한 업무만 새 실행을 시작할 수 있습니다.');
       const active = await tx`select 1 from workflow_runs where organization_id=${organizationId} and task_id=${id} and status in ('QUEUED','RUNNING','PAUSED','BLOCKED','WAITING_APPROVAL')`;
       if (active.length) throw new ApiError(409, 'ACTIVE_RUN_EXISTS', '이미 진행 중인 실행이 있습니다.');
-      const created = await tx<WorkflowRow[]>`insert into workflow_runs (id,organization_id,project_id,task_id,command_original_ko,fixture,checkpoint)
-        values (${randomUUID()},${organizationId},${task.project_id},${id},${task.command_original_ko},${body.fixture},${tx.json(jsonValue(initialCheckpoint()))}) returning *`;
+      const created = await tx<WorkflowRow[]>`insert into workflow_runs (id,organization_id,project_id,task_id,command_original_ko,fixture,repository_source,checkpoint)
+        values (${randomUUID()},${organizationId},${task.project_id},${id},${task.command_original_ko},${body.fixture},${source ? tx.json(jsonValue(source)) : null},${tx.json(jsonValue(initialCheckpoint()))}) returning *`;
       const staffing = await pinRunStaffing(tx, organizationId, task.project_id, created[0].id);
       try { await reserveExecution(tx, { org: organizationId, project: task.project_id, operation: created[0].id, kind: 'WORKFLOW', totalTokens: 0, profileLimit: Math.min(...staffing.map(p => p.limits.maxTokens)) }); }
       catch (error) { throw new ApiError(409, error instanceof ExecutionBlocked ? error.reason : 'POLICY_UNVERIFIABLE', '조직·프로젝트·직원 토큰 예산을 확인하세요.'); }
@@ -97,9 +106,22 @@ export function workflowRoutes(database: Database, provider?: AgentProvider) {
       const terminal = ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(row.status);
       let status = row.status;
       const checkpoint = { ...row.checkpoint };
+      if (body.verificationWindowMs && (body.action !== 'reverify' || checkpoint.verificationWindow)) throw new ApiError(409, 'VERIFICATION_WINDOW_INVALID', '검증 전용 시간은 같은 후보에 한 번만 승인할 수 있습니다.');
+      if (body.action === 'reverify' && !body.verificationWindowMs && !checkpoint.verificationWindow && checkpoint.startedAt
+        && Date.now() - Date.parse(checkpoint.startedAt) >= limits.elapsedMs) throw new ApiError(409, 'VERIFICATION_WINDOW_REQUIRED', '기존 실행 시간이 끝났습니다. 같은 후보의 5분 검증·QA 1회에는 별도 Owner 승인이 필요합니다.');
       if (body.action === 'cancel' && !terminal) { status = 'CANCELLED';
         if (checkpoint.stopReason !== 'STOP_UNVERIFIABLE') checkpoint.stopReason = 'OWNER_CANCELLED'; }
       else if (body.action === 'pause' && ['QUEUED', 'RUNNING'].includes(row.status)) { status = 'PAUSED'; checkpoint.stopReason = 'OWNER_PAUSED'; }
+      else if (body.action === 'reverify' && row.fixture === 'how-to-trash-v1' && row.status === 'BLOCKED'
+        && checkpoint.stopReason === 'DEVELOPER_CONTRACT_INVALID' && !checkpoint.activeTurnId && !checkpoint.activeThreadId && !row.stop_lease_token
+        && checkpoint.workspace && checkpoint.workspace.sha === checkpoint.verification?.sha
+        && checkpoint.roles.filter(role => role.role === 'DEVELOPER').at(-1)?.candidateSha === checkpoint.workspace.sha) {
+        status = 'QUEUED'; checkpoint.stage = 'VERIFY'; checkpoint.stopReason = null; checkpoint.verification = null;
+        if (body.verificationWindowMs) {
+          const approvedAt = new Date();
+          checkpoint.verificationWindow = { approvedAt: approvedAt.toISOString(), deadlineAt: new Date(approvedAt.getTime() + body.verificationWindowMs).toISOString(), qaAttemptsRemaining: 1, candidateSha: checkpoint.workspace.sha };
+        }
+      }
       else if (body.action === 'resume' && ['PAUSED', 'BLOCKED'].includes(row.status) && !checkpoint.activeTurnId && !checkpoint.activeThreadId && !row.stop_lease_token && !['RECOVERY_REQUIRED', 'STOP_UNVERIFIABLE'].includes(checkpoint.stopReason ?? '')) {
         status = 'QUEUED'; checkpoint.stopReason = null;
       } else throw new ApiError(409, 'INVALID_TRANSITION', '현재 상태에서는 이 제어를 실행할 수 없습니다.');
@@ -109,6 +131,7 @@ export function workflowRoutes(database: Database, provider?: AgentProvider) {
       if (status !== 'QUEUED') await settleExecution(tx, row.organization_id, row.id, checkpoint.usage.inputTokens + checkpoint.usage.outputTokens, row.lease_token ? 'UNKNOWN' : 'SETTLED');
       await recordWorkflow(tx, updated[0]);
       await audit(tx, c, `workflow.run.${body.action}`, 'workflow_run', id, row.project_id);
+      if (body.verificationWindowMs) await audit(tx, c, 'workflow.verification_window.approved', 'workflow_run', id, row.project_id);
       return { status: 200, data: publicWorkflow(updated[0]) };
     });
   });

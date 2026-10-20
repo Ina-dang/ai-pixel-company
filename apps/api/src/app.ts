@@ -84,7 +84,7 @@ function nextPage(row: { id: string; cursor_time: string } | undefined) {
   return row ? Buffer.from(JSON.stringify({ id: row.id, createdAt: row.cursor_time })).toString('base64url') : null;
 }
 
-export function createApp({ database, config, workflowProvider, integrations, reviews, operations,voice,structuredLogs=false }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; integrations?: IntegrationService; reviews?: ReviewService; operations?:OperationsService;voice?:VoiceService;structuredLogs?:boolean }) {
+export function createApp({ database, config, workflowProvider, repositoryAdmission, integrations, reviews, operations,voice,structuredLogs=false }: { database: Database; config: ApiConfig; workflowProvider?: AgentProvider; repositoryAdmission?: () => Promise<import('@ai-pixel/agents').RepositorySource>; integrations?: IntegrationService; reviews?: ReviewService; operations?:OperationsService;voice?:VoiceService;structuredLogs?:boolean }) {
   const app = new Hono<ApiEnv>();
   const integrationService = integrations ?? new IntegrationService(database, fileURLToPath(new URL('../../../', import.meta.url)));
   const operationService=operations??new OperationsService(database,fileURLToPath(new URL('../../../',import.meta.url)));
@@ -173,7 +173,7 @@ export function createApp({ database, config, workflowProvider, integrations, re
       organization: { id: auth.organizationId, name: auth.organizationName }, csrfToken: csrfToken(c),
     }, requestId: c.get('requestId') });
   });
-  app.route('/api/v1', workflowRoutes(database, workflowProvider));
+  app.route('/api/v1', workflowRoutes(database, workflowProvider, repositoryAdmission));
   app.route('/api/v1', staffingRoutes(database));
   app.route('/api/v1', integrationService.routes());
   app.route('/api/v1', projectOperationsRoutes(database, workflowProvider));

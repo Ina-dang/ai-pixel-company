@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import type { RoleEvidence, SubscriptionState, WorkflowRun } from '../../apps/web/app/ui/api';
 
 const taskId = '22222222-3333-4444-8555-666666666666';
@@ -8,6 +8,18 @@ const projectId = '33333333-4444-4555-8666-777777777777';
 const runId = '44444444-5555-4666-8777-888888888888';
 const now = '2026-10-19T00:00:00.000Z';
 const sha = 'a'.repeat(40);
+let cookies: Parameters<BrowserContext['addCookies']>[0] = [];
+test.beforeAll(async ({ browser }) => {
+  const context = await browser.newContext();
+  try {
+    const base = process.env.UI_BASE_URL ?? 'http://127.0.0.1:3000';
+    const response = await context.request.post(`${base}/api/v1/auth/session`, {
+      data: { secret: process.env.E2E_OWNER_SECRET ?? readFileSync(resolve('.local/owner-key'), 'utf8').trim() }, headers: { Origin: base },
+    });
+    expect(response.status()).toBe(200); cookies = await context.cookies();
+  } finally { await context.close(); }
+});
+test.beforeEach(async ({ context }) => { await context.addCookies(cookies); });
 const task = { id: taskId, projectId, title: '격리 함수 검증', commandOriginalKo: '덧셈 함수를 구현하고 테스트해 주세요.',
   status: 'TODO', statusLabelKo: '대기', priority: 'MEDIUM', version: 1, createdAt: now, updatedAt: now,
   acceptanceCriteria: [{ id: 'AC-1', descriptionKo: '덧셈 테스트를 통과한다', method: 'test', required: true }] };
@@ -26,7 +38,7 @@ function role(roleName: RoleEvidence['role']): RoleEvidence {
       verdict: roleName === 'QA' ? 'PASS' : 'NA', candidateSha: sha, issues: [] } };
 }
 
-async function mockWorkflow(page: Page, initial: WorkflowRun | null, ready = true) {
+async function mockWorkflow(page: Page, initial: WorkflowRun | null, ready = true, repositoryUrl = 'https://github.com/Ina-dang/ai-pixel-company.git') {
   const state = { current: initial, subscription: { ready, reason: ready ? null : 'QUOTA_EXHAUSTED', authMode: 'chatgpt',
     billingMode: 'CHATGPT_SUBSCRIPTION', windows: [{ usedPercent: ready ? 20 : 100, resetsAt: 1792458000, windowDurationMins: 300 }], checkedAt: now } as SubscriptionState,
     requests: [] as { path: string; body: Record<string, unknown>; csrf: string | undefined; key: string | undefined }[], failNext: false };
@@ -35,7 +47,7 @@ async function mockWorkflow(page: Page, initial: WorkflowRun | null, ready = tru
     const path = new URL(request.url()).pathname.replace('/api/v1', '');
     const fulfill = (data: unknown, pagination?: unknown) => route.fulfill({ json: { data, ...(pagination ? { pagination } : {}) } });
     if (path === '/subscription') return fulfill(state.subscription);
-    if (path === '/projects') return fulfill([{ id: projectId, name: '브라우저 실행 검증', repositoryUrl: 'https://github.com/Ina-dang/ai-pixel-company.git', defaultBranch: 'main', version: 1 }], { nextCursor: null });
+    if (path === '/projects') return fulfill([{ id: projectId, name: '브라우저 실행 검증', repositoryUrl, defaultBranch: 'main', version: 1 }], { nextCursor: null });
     if (path === `/projects/${projectId}/snapshot`) return fulfill({ projectId, cursor: '0', tasks: [task], agents: [], approvals: [] });
     if (path === `/tasks/${taskId}`) return fulfill({ ...task, events: [] });
     if (path === '/events/stream') return route.fulfill({ contentType: 'text/event-stream', body: ': test fixture\n\n' });
@@ -56,12 +68,35 @@ async function mockWorkflow(page: Page, initial: WorkflowRun | null, ready = tru
 
 async function loginAndSelect(page: Page) {
   await page.goto('/');
-  const key = process.env.E2E_OWNER_SECRET ?? readFileSync(resolve('.local/owner-key'), 'utf8').trim();
-  await page.getByLabel('Owner 비밀키', { exact: true }).fill(key);
-  await page.getByRole('button', { name: '로그인', exact: true }).click();
+  await expect(page.getByRole('button', { name: '로그아웃', exact: true })).toBeVisible();
   await page.getByRole('button', { name: `업무 상세: ${task.title}`, exact: true }).click();
   await expect(page.getByRole('heading', { name: 'AI 직원 실행', exact: true })).toBeVisible();
 }
+
+test('selected real repository uses its bounded profile instead of the arithmetic fixture', async ({ page }) => {
+  const state = await mockWorkflow(page, null, true, 'https://github.com/Ina-dang/how-to-trash.git');
+  await loginAndSelect(page);
+  await page.getByRole('button', { name: '실제 저장소 업무 실행', exact: true }).click();
+  await expect.poll(() => state.requests.length).toBe(1);
+  expect(state.requests[0].body).toEqual({ fixture: 'how-to-trash-v1' });
+  expect(state.requests[0].csrf).toBeTruthy(); expect(state.requests[0].key).toBeTruthy();
+});
+
+test('same-candidate verification preserves explicit control and never silently grants extra time', async ({ page }) => {
+  const blocked = run('BLOCKED'); blocked.fixture = 'how-to-trash-v1';
+  blocked.repositorySource = { profile: 'how-to-trash-v1', repositoryUrl: 'https://github.com/Ina-dang/how-to-trash.git', baseSha: 'b'.repeat(40), admissionSha: 'c'.repeat(64), imageId: `sha256:${'d'.repeat(64)}` };
+  blocked.checkpoint.stage = 'DEVELOPER'; blocked.checkpoint.stopReason = 'DEVELOPER_CONTRACT_INVALID';
+  blocked.checkpoint.workspace = { files: [], sha, diff: '+candidate' };
+  blocked.checkpoint.verification = { sha, test: { exitCode: 0, output: 'pass' }, build: { exitCode: 1, output: 'browser evidence failed' },
+    sandbox: { networkDisabled: true, readOnlyRoot: true, resourceLimited: true }, verifiedAt: now };
+  const state = await mockWorkflow(page, blocked, true, 'https://github.com/Ina-dang/how-to-trash.git');
+  await loginAndSelect(page);
+  await expect(page.getByText('b'.repeat(40), { exact: true })).toBeVisible();
+  expect(state.requests).toEqual([]);
+  await page.getByRole('button', { name: '같은 후보 다시 검증', exact: true }).click();
+  await expect.poll(() => state.requests.length).toBe(1);
+  expect(state.requests[0].body).toEqual({ action: 'reverify', expectedVersion: 2 });
+});
 
 test('quota blocks launches and requires explicit resume after reset', async ({ page }) => {
   const blocked = run('BLOCKED'); blocked.checkpoint.stopReason = 'QUOTA_EXHAUSTED';

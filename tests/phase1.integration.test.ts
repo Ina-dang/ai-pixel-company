@@ -20,6 +20,9 @@ let secretHash: string;
 let cookie: string;
 let csrf: string;
 let ready = true;
+let admitted = true;
+const repositorySource = { profile: 'how-to-trash-v1' as const, repositoryUrl: 'https://github.com/Ina-dang/how-to-trash.git',
+  baseSha: 'e98a537cada650e64a29b5e25c5cf6e94f5ced0f', imageId: `sha256:${'a'.repeat(64)}`, admissionSha: 'b'.repeat(64) };
 const provider: AgentProvider = {
   status: async () => ({ ready, reason: ready ? null : 'QUOTA_LIMIT', authMode: 'chatgpt', billingMode: 'CHATGPT_SUBSCRIPTION', windows: [{ usedPercent: ready ? 30 : 100, resetsAt: null, windowDurationMins: null }], checkedAt: new Date().toISOString() }),
   run: async () => { throw new Error('No live inference in integration fixtures.'); }, close: async () => undefined,
@@ -59,7 +62,8 @@ beforeEach(async () => {
   await database.sql`truncate organizations,users cascade`;
   await initializeOwner(database);
   ready = true;
-  app = createApp({ database, workflowProvider: provider, config: { appOrigin: ORIGIN, bootstrapSecretHash: secretHash, sessionTtlSeconds: 3600, cookieSecure: false,
+  admitted = true;
+  app = createApp({ database, workflowProvider: provider, repositoryAdmission: async () => { if (!admitted) throw new Error('Not provisioned'); return repositorySource; }, config: { appOrigin: ORIGIN, bootstrapSecretHash: secretHash, sessionTtlSeconds: 3600, cookieSecure: false,
     ssePollMs: 10, sseHeartbeatMs: 100, sseBatchSize: 1000, sseRetentionDays: 30, loginMaxAttempts: 100, loginWindowMs: 60_000 } });
   const login = await app.request('http://127.0.0.1:3001/api/v1/auth/session', { method: 'POST', headers: { Origin: ORIGIN, 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: SECRET }) });
   expect(login.status).toBe(200);
@@ -69,6 +73,53 @@ beforeEach(async () => {
 afterAll(async () => { await database.close(); });
 
 describe('Phase 1 durable subscription workflow', () => {
+  test('pins the selected repository source and rejects profile substitution or source mutation', async () => {
+    const project = (await (await request('/projects', 'POST', { name: '실제 저장소 검증', repositoryUrl: repositorySource.repositoryUrl, defaultBranch: 'main' })).json()).data;
+    const task = (await (await request(`/projects/${project.id}/tasks`, 'POST', { title: '지역 검색', commandOriginalKo: '지역 검색을 구현해 주세요.',
+      acceptanceCriteria: [{ id: 'AC-1', descriptionKo: '지역을 검색한다', method: 'unit-test', required: true }] })).json()).data;
+    expect((await request(`/tasks/${task.id}/runs`, 'POST', { fixture: 'node-functions-v1' })).status).toBe(409);
+    admitted = false;
+    const unprepared = await request(`/tasks/${task.id}/runs`, 'POST', { fixture: 'how-to-trash-v1' });
+    expect(unprepared.status).toBe(409); expect((await unprepared.json()).error.code).toBe('REPOSITORY_NOT_PROVISIONED');
+    admitted = true;
+    const created = await request(`/tasks/${task.id}/runs`, 'POST', { fixture: 'how-to-trash-v1' });
+    expect(created.status).toBe(201);
+    const run = (await created.json()).data;
+    expect(run.fixture).toBe('how-to-trash-v1'); expect(run.repositorySource).toEqual(repositorySource);
+    expect((await repository.get(run.id))?.repositorySource).toEqual(repositorySource);
+    await expect(database.sql`update workflow_runs set repository_source=repository_source||'{"baseSha":"different"}'::jsonb where id=${run.id}`).rejects.toThrow();
+    await expect(database.sql`update workflow_runs set fixture='node-functions-v1',repository_source=null where id=${run.id}`).rejects.toThrow();
+    const claimed = await repository.claim();
+    expect(claimed?.id).toBe(run.id);
+    if (!claimed?.leaseToken) throw new Error('Expected repository lease');
+    const checkpoint = { ...acceptedCheckpoint(), stage: 'DEVELOPER' as const, turns: 4, rework: 1,
+      usage: { inputTokens: 120, outputTokens: 40, cachedInputTokens: 0 }, startedAt: new Date(Date.now()-20*60_000).toISOString(), stopReason: 'DEVELOPER_CONTRACT_INVALID' };
+    if (checkpoint.verification) checkpoint.verification.build.exitCode = 1;
+    expect(await repository.save(run.id, claimed.leaseToken, { status: 'BLOCKED', checkpoint })).toBe(true);
+    const blocked = await repository.get(run.id); if (!blocked) throw new Error('Expected blocked run');
+    expect((await request(`/runs/${run.id}/control`, 'POST', { action: 'reverify', expectedVersion: blocked.version })).status).toBe(409);
+    const reverified = await request(`/runs/${run.id}/control`, 'POST', { action: 'reverify', expectedVersion: blocked.version, verificationWindowMs: 300_000 });
+    expect(reverified.status).toBe(200);
+    const queued = await repository.get(run.id);
+    expect(queued?.checkpoint.stage).toBe('VERIFY'); expect(queued?.checkpoint.verification).toBeNull();
+    expect(queued?.checkpoint.usage).toEqual(checkpoint.usage); expect(queued?.checkpoint.turns).toBe(4);
+    expect(queued?.checkpoint.rework).toBe(1); expect(queued?.checkpoint.startedAt).toBe(checkpoint.startedAt);
+    expect(queued?.repositorySource).toEqual(repositorySource);
+    expect(queued?.checkpoint.verificationWindow?.qaAttemptsRemaining).toBe(1);
+    expect(queued?.checkpoint.verificationWindow?.candidateSha).toBe(SHA);
+    expect(Date.parse(queued?.checkpoint.verificationWindow?.deadlineAt ?? '')-Date.parse(queued?.checkpoint.verificationWindow?.approvedAt ?? '')).toBe(300_000);
+    expect((await request(`/runs/${run.id}/control`, 'POST', { action: 'reverify', expectedVersion: queued?.version, verificationWindowMs: 300_000 })).status).toBe(409);
+    expect((await request(`/runs/${run.id}/control`, 'POST', { action: 'reverify', expectedVersion: queued?.version })).status).toBe(409);
+  });
+  test('cannot execute a repository profile for a different project or bypass subscription admission', async () => {
+    const fixture = await createRun();
+    const wrong = await request(`/tasks/${fixture.taskId}/runs`, 'POST', { fixture: 'how-to-trash-v1' });
+    expect(wrong.status).toBe(409); expect((await wrong.json()).error.code).toBe('REPOSITORY_PROFILE_MISMATCH');
+    ready = false;
+    const limited = await request(`/tasks/${fixture.taskId}/runs`, 'POST', { fixture: 'how-to-trash-v1' });
+    expect(limited.status).toBe(409); expect((await limited.json()).error.code).toBe('SUBSCRIPTION_UNAVAILABLE');
+    expect(await database.sql`select 1 from workflow_runs where fixture='how-to-trash-v1'`).toHaveLength(0);
+  });
   test('subscription status is authenticated; readiness and bound fixture gate queue creation', async () => {
     expect((await request('/subscription', 'GET', undefined, { Cookie: '' })).status).toBe(401);
     expect((await (await request('/subscription')).json()).data.billingMode).toBe('CHATGPT_SUBSCRIPTION');

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { ExecutionBlocked, initialCheckpoint, type Checkpoint, type RunStatus, type WorkflowRun, type WorkflowStore } from '@ai-pixel/agents';
+import { ExecutionBlocked, initialCheckpoint, type Checkpoint, type RepositorySource, type RunStatus, type WorkflowRun, type WorkflowStore } from '@ai-pixel/agents';
 import type { Database, Transaction } from '@ai-pixel/db';
 import type postgres from 'postgres';
 import { z } from 'zod';
@@ -9,15 +9,16 @@ import { dependencyBlock, reserveExecution, settleExecution, sharedSlotAvailable
 import type { Role, StaffingProfile, StaffingTool } from '@ai-pixel/agents';
 
 const usageSchema = z.object({ inputTokens: z.number().int().nonnegative(), cachedInputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative() });
-const fileSchema = z.object({ path: z.string().max(256), content: z.string().max(100_000) });
+const fileSchema = z.object({ path: z.string().max(256), content: z.string().max(300_000) });
 const shaSchema = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
 export const checkpointSchema = z.object({
+  verificationWindow: z.object({ approvedAt: z.iso.datetime(), deadlineAt: z.iso.datetime(), qaAttemptsRemaining: z.number().int().min(0).max(1), candidateSha: shaSchema }).optional(),
   stage: z.enum(['PM', 'DEVELOPER', 'VERIFY', 'QA']), rework: z.number().int().min(0).max(2), turns: z.number().int().min(0).max(20), usage: usageSchema,
   roles: z.array(z.object({ role: z.enum(['PM', 'DEVELOPER', 'QA']), threadId: z.string().min(1), turnId: z.string().min(1).nullable(),
     output: z.object({ summaryKo: z.string(), specEn: z.string(), acceptanceCriteria: z.array(z.object({ id: z.string(), description: z.string() })), files: z.array(fileSchema).max(20),
       verdict: z.enum(['PASS', 'FAIL', 'NA']), candidateSha: z.string(), issues: z.array(z.string()) }),
     usage: usageSchema, candidateSha: shaSchema.nullable(), completedAt: z.iso.datetime() })).max(20),
-  workspace: z.object({ files: z.array(fileSchema).max(32), sha: shaSchema, diff: z.string().max(500_000) }).nullable(),
+  workspace: z.object({ files: z.array(fileSchema).max(64), sha: shaSchema, diff: z.string().max(500_000) }).nullable(),
   verification: z.object({ sha: shaSchema, test: z.object({ exitCode: z.number().int(), output: z.string() }), build: z.object({ exitCode: z.number().int(), output: z.string() }),
     sandbox: z.object({ networkDisabled: z.boolean(), readOnlyRoot: z.boolean(), resourceLimited: z.boolean() }), verifiedAt: z.iso.datetime() }).nullable(),
   activeThreadId: z.string().nullable(), activeTurnId: z.string().nullable(), startedAt: z.iso.datetime().nullable(), stopReason: z.string().nullable(),
@@ -27,10 +28,12 @@ export type WorkflowRow = {
   id: string; organization_id: string; project_id: string; task_id: string; command_original_ko: string;
   status: RunStatus; version: number; checkpoint: Checkpoint; lease_token: string | null; lease_expires_at: Date | null; stop_lease_token: string | null;
   created_at: Date; updated_at: Date;
+  fixture?: 'node-functions-v1' | 'how-to-trash-v1'; repository_source?: RepositorySource | null;
 };
 export function workflowView(row: WorkflowRow): WorkflowRun {
   return { id: row.id, organizationId: row.organization_id, projectId: row.project_id, taskId: row.task_id,
     commandOriginalKo: row.command_original_ko, status: row.status, version: row.version, checkpoint: row.checkpoint,
+    fixture: row.fixture ?? 'node-functions-v1', repositorySource: row.repository_source ?? undefined,
     leaseToken: row.lease_token, leaseExpiresAt: row.lease_expires_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
 }
@@ -130,12 +133,14 @@ export class WorkflowRepository implements WorkflowStore {
     return null;
   }
   private async queueScheduled(tx: Transaction, org: string) {
-    const schedules = await tx<{ task_id: string; project_id: string; requested_by: string; command_original_ko: string }[]>`select s.task_id,s.project_id,s.requested_by,t.command_original_ko
+    const schedules = await tx<{ task_id: string; project_id: string; requested_by: string; command_original_ko: string; repository_url: string }[]>`select s.task_id,s.project_id,s.requested_by,t.command_original_ko,p.repository_url
       from task_schedules s join tasks t on t.organization_id=s.organization_id and t.id=s.task_id
+      join projects p on p.organization_id=s.organization_id and p.id=s.project_id
       where s.organization_id=${org} and s.enabled=true and t.status in ('TODO','FAILED')
       order by case t.priority when 'URGENT' then 4 when 'HIGH' then 3 when 'MEDIUM' then 2 else 1 end desc,s.created_at,s.task_id`;
     for (const schedule of schedules) {
       let reason = await dependencyBlock(tx, org, schedule.project_id, schedule.task_id);
+      if (/^https:\/\/github\.com\/Ina-dang\/how-to-trash(?:\.git)?\/?$/.test(schedule.repository_url)) reason = 'MANUAL_REPOSITORY_RUN_REQUIRED';
       const owner = await tx`select 1 from memberships where organization_id=${org} and user_id=${schedule.requested_by} and role='OWNER' and status='ACTIVE'`;
       if (!owner.length) reason = 'OWNER_PERMISSION_REVOKED';
       const active = await tx`select 1 from workflow_runs where organization_id=${org} and task_id=${schedule.task_id} and status in ('QUEUED','RUNNING','PAUSED','BLOCKED','WAITING_APPROVAL')`;

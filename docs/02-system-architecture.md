@@ -1,5 +1,9 @@
 # 시스템 아키텍처
 
+## 실제 저장소 고정 프로필 — 2026-10-20
+
+ADR-019에 따라 `node-functions-v1`을 유지하고 `how-to-trash-v1`만 추가했다. 프로젝트 URL·기준 commit·admission digest·불변 image ID를 run에 고정하며 DB가 source 변경을 거부한다. 같은 WorkflowRunner/구독/lease/직원 권한·예산 검사를 사용하고 `forRun`이 해당 Sandbox로 전달한다. 테스트·빌드·브라우저 후보 코드는 모두 network=none Docker에서 실행한다. 브라우저의 loopback GET/HEAD 중계는 호스트 Owner API를 공개하지 않는다. 이는 제한된 실제 저장소 1개 지원이며 범용 clone/임의 package script/네트워크 실행 지원이 아니다. 최신 판정은 README와 체크리스트를 따른다.
+
 ## Phase 1 구현 보충 — 2026-10-19
 
 현재 로컬 구독 실행은 [ADR-011](17-decision-log.md)의 PostgreSQL 영구 큐→Node WorkflowRunner→공식 Codex CLI PM/Developer/QA→Docker broker 경로다. 아래 Redis/BullMQ·Python LangGraph HTTP 그림은 최초 확장 설계이며 현재 실행 구성과 구분한다. 추가 API 공급자 과금 경로는 구현하지 않는다. DB 상태/lease/승인 권한, 역할별 증거와 Sandbox 책임은 유지한다. 범용 저장소 실행은 미지원이다.

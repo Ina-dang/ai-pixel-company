@@ -4,7 +4,7 @@
 
 자연어 업무 지시를 PM·Developer·QA AI의 실제 개발 작업으로 연결하고, 검증된 실행 상태를 픽셀 사무실에 표시하는 AI 회사 운영 플랫폼이다.
 
-**현재 상태: Phase 5 로컬 음성 후보·강제 종료 복구에 이어, 사용자 직접 마이크 녹음→전사→취소·텍스트/파일 정리1건을 확인했다. 앱의 마이크 차단 헤더를 same-origin 허용으로 수정했다. 최종 자동244개(3개 순차 묶음)·Chromium45개·계약·lint/typecheck/build PASS다. 단일 pnpm verify의 중간 실패/시간 제한은 별도 이력으로 보존한다. 전사 오인식·다른 환경/운영 개인정보·기존 운영 C 제한은 남았으며 실제 merge·운영 배포는 미수행이다.**
+**현재 상태: 사용자가 Phase 5 검증을 수락한 뒤 how-to-trash의 지역 목록·검색을 첫 실제 업무로 선택했다. 고정 저장소 프로필·실제 PM/Developer 수정·오프라인 검사·브라우저 네 조건을 검증했다. QA 1차는 브라우저/명령 근거 부족으로 FAIL이며, 기존 15분 실행 시간 종료 뒤 최종 QA의 별도 5분·1회 승인을 기다린다. 완료·수락·push를 아직 주장하지 않는다. 자동257개(42+80+135)·Chromium47개·계약/lint/typecheck/build PASS다. 실제 merge·운영 배포·새 유료 API는 미수행이다.**
 
 - B단계: Phase 0 기반 → Phase 1 실제 AI 실행 → Phase 2 픽셀 사무실.
 - C단계: Phase 3 GitHub·Slack·채용 → Phase 4 평가·다중 프로젝트·운영.
@@ -12,7 +12,19 @@
 
 문서 탐색은 [전체 목차](docs/INDEX.md), 개발 원칙은 [프로젝트 지침](docs/PROJECT_INSTRUCTIONS.md)과 [AGENTS.md](AGENTS.md)를 따른다. 구현 순서는 [로드맵](docs/13-development-roadmap.md), 착수 조건과 검증 결과는 [구현 체크리스트](docs/IMPLEMENTATION_CHECKLIST.md)를 참조한다.
 
-## Phase 5 실제 마이크 후속 — 2026-10-20
+## 실제 저장소 첫 적용: how-to-trash — 2026-10-20
+
+- 대상: `https://github.com/Ina-dang/how-to-trash.git`, 기준 커밋 `e98a537cada650e64a29b5e25c5cf6e94f5ced0f`, 프로필 `how-to-trash-v1`. 범용 저장소/임의 명령 실행 지원을 의미하지 않는다.
+- 허용 변경: 홈 페이지, 지역 목록 컴포넌트/별도 스타일, 순수 검색 helper, 회귀 테스트, package.json의 고정 test 스크립트 추가만이다. 데이터·지도·설정·의존성·lockfile·기존 자산은 변경하지 않는다. binary 자산도 비교하며 전체 후보 SHA는 admission과 텍스트 파일을 함께 묶는다.
+- 준비: `.local/repositories/how-to-trash`에 선택 저장소를 복제한 뒤 `pnpm setup:repository --baseline`. 고정 Node 이미지에서 lockfile로 `npm ci --ignore-scripts --no-audit --no-fund`를 수행하고 이미지 ID·기준 commit·manifest digest를 고정한다. 기존 admission은 재사용하며 조용히 덮어쓰지 않는다. 저장소 키/호스트 설정/daemon socket을 후보 컨테이너에 전달하지 않는다.
+- 실행/검증: `pnpm verify:repository-live`는 실제 대시보드 버튼→PG 큐→Codex 구독 PM/Developer/QA를 관측한다. `--observe`는 기존 run을 관측하고 `--reverify`는 같은 후보를 다시 검사한다. 이미 run이 있으면 새 모델 작업을 자동 생성하지 않는다. 토큰·turn·재작업·시작 시각은 보존한다. 별도 Owner 승인 전에는 `--approve-5min`을 사용하지 않는다.
+- 검사: candidate는 network=none/read-only root/non-root/cap-drop/no-new-privileges/cgroup/time 제한에서 테스트·Next build·eslint·tsc를 수행한다. 브라우저도 network=none 컨테이너의 같은 후보를 사용한다. 호스트 loopback3002의 GET/HEAD 전용 중계에는 인증 헤더/비밀을 넘기지 않으며, 브라우저의 중계 외 origin·service worker를 차단한다.
+- 실제 후보 `ae2afa1c1f6eebec7471c0cffc7ee7319c94e7c147873f940beaa0f99e2e2e28`, run `76c33b20-14a6-48b4-a491-7038e7a2918c`, project `c50bedb0-29e8-4582-a3ff-f04168aff93a`, task `2db930ba-577c-4394-ab13-b9c8556b8c44`. PM/Developer 완료와 실제 테스트/build0 뒤 QA가 근거 부족으로 FAIL했다. 이 결과와 두 번의 빈 Developer 응답은 삭제하지 않았고 최종 PASS로 바꾸지 않았다.
+- 브라우저: 1440px/375px × 지도 키 없음/실제 SDK 요청 차단의 네 경우에서 25개 목록·부분/공백 검색·없음·초기화/입력 포커스·키보드 상세 이동·HTTP404·가로 넘침을 확인했다. `Event`는 기존 404 UI stylesheet에서도 재현돼 별도 baseline 근거로 보존한다. 기능 경로 오류0과 404 UI 한계를 구분하며 이를 해결한 것으로 표시하지 않는다. 후속 실제 치수/포커스 측정은 최종 재검증 근거에 포함한다.
+- 이전 실패: 웹 재시작 디렉터리 오류·로그인 시 준비 대기/선택 누락·기존 native STOP_UNVERIFIABLE·브라우저의 외부 폰트 분류/404 범위 오류를 분리했다. PID53548/자식/전용 worker·DB 미확정 실행0을 확인하고 native 원본 latch를 보존한 후 수동 조정했다. 무한 재시도/비밀 출력/불명 모델 작업의 자동 replay는 없다.
+- 근거: Git 제외 `.local/how-to-trash-live-attempts.json`, `how-to-trash-browser.json`, `how-to-trash-baseline404.json`, `browser-evidence/how-to-trash-*.png`와 DB checkpoint. 원문·PM spec/AC·Developer 파일·QA 의견·사용량·후보 SHA가 같은 run에 연결된다. 최종 QA PASS·동일 SHA 검사 전에는 `pnpm export:repository`가 거부된다. export는 Owner 결과 수락/merge/배포를 수행하지 않는다.
+
+## Phase 5 실제 마이크 후속 — 2026-10-20 (수락된 이전 검증)
 
 ✅ 사용자가 직접 마이크 녹음·전사·취소 후 원문 비워짐을 확인했고 서버 DB와 대조했다. 녹음 후보 `c379521b-965a-4071-8ee6-eee5970eaef6`는 source=MICROPHONE, duration=9480ms이며 9480÷1000=9.48초다. READY/version2 → CANCELLED/version3, transcript=null, task_id=null을 확인했다. 실제로 선택된 시험 프로젝트는 `da360b7c-8d0e-4bbb-9f2b-4f767dddab55`이며, 녹음 생성 시각 이후 새 task/run은0이다. 기존 프로젝트 업무를 삭제하지 않았다. 원시 임시 음성은0개다. 별도로 준비했으나 사용하지 않은 빈 시험 프로젝트 `e0163ab5-a7dc-4997-9611-1a6f46dd2ff2`만 범위 확인 후 ARCHIVED로 정리했다.
 

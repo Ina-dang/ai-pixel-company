@@ -9,6 +9,9 @@ export interface StaffingProfile {
   limits: { maxTurns: number; maxTokens: number; maxElapsedMs: number }; avatar: 'pm' | 'developer' | 'qa';
 }
 export interface FileContent { path: string; content: string }
+export interface RepositorySource {
+  profile: 'how-to-trash-v1'; repositoryUrl: string; baseSha: string; admissionSha: string; imageId: string;
+}
 export interface Workspace { files: FileContent[]; sha: string; diff: string }
 export interface Verification {
   sha: string;
@@ -29,6 +32,7 @@ export interface RoleOutput {
 export interface Usage { inputTokens: number; cachedInputTokens: number; outputTokens: number }
 export interface RoleEvidence { role: Role; threadId: string; turnId: string | null; output: RoleOutput; usage: Usage; candidateSha: string | null; completedAt: string }
 export interface Checkpoint {
+  verificationWindow?: { approvedAt: string; deadlineAt: string; qaAttemptsRemaining: number; candidateSha: string };
   stage: Stage;
   rework: number;
   turns: number;
@@ -47,6 +51,8 @@ export interface WorkflowRun {
   leaseToken: string | null; leaseExpiresAt: string | null;
   checkpoint: Checkpoint; createdAt: string; updatedAt: string;
   staffing?: StaffingProfile[];
+  fixture?: 'node-functions-v1' | 'how-to-trash-v1';
+  repositorySource?: RepositorySource;
 }
 export interface WorkflowStore {
   claim(): Promise<WorkflowRun | null>;
@@ -71,6 +77,7 @@ export interface AgentProvider {
   close(): Promise<void>;
 }
 export interface CodeSandbox {
+  forRun?(run: WorkflowRun): CodeSandbox;
   prepare(runId: string): Promise<Workspace>;
   apply(runId: string, files: FileContent[]): Promise<Workspace>;
   snapshot(runId: string): Promise<Workspace>;

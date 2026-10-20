@@ -84,6 +84,8 @@ export type RoleEvidence = {
 };
 
 export type WorkflowRun = {
+  fixture?: "node-functions-v1" | "how-to-trash-v1";
+  repositorySource?: { profile: string; repositoryUrl: string; baseSha: string; admissionSha: string; imageId: string };
   id: string;
   taskId: string;
   status: "QUEUED" | "RUNNING" | "PAUSED" | "BLOCKED" | "WAITING_APPROVAL" | "SUCCEEDED" | "FAILED" | "CANCELLED";

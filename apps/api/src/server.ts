@@ -1,5 +1,5 @@
 import { createDatabase, migrateDatabase } from '@ai-pixel/db';
-import { CodexSubscriptionProvider, DockerSandbox, WorkflowRunner } from '@ai-pixel/agents';
+import { CodexSubscriptionProvider, DockerSandbox, RepositorySandbox, WorkflowRunner } from '@ai-pixel/agents';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { loadRuntime } from '../../../scripts/runtime.js';
@@ -21,7 +21,15 @@ const voice = new VoiceService(database, root);
 await integrations.configureFromLocalFile();
 const provider = new CodexSubscriptionProvider(root);
 const reviews = new ReviewService(database, provider);
-const runner = new WorkflowRunner(new WorkflowRepository(database), provider, new DockerSandbox(`${root}/.local/agent-workspaces`));
+const fixtureSandbox = new DockerSandbox(`${root}/.local/agent-workspaces`);
+const sandbox = Object.assign(fixtureSandbox, { forRun(run: import('@ai-pixel/agents').WorkflowRun) {
+  if (run.fixture === 'how-to-trash-v1') {
+    if (!run.repositorySource) throw new Error('Sandbox: REPOSITORY_SOURCE_MISSING');
+    return new RepositorySandbox(root, run.repositorySource);
+  }
+  return fixtureSandbox;
+} });
+const runner = new WorkflowRunner(new WorkflowRepository(database), provider, sandbox);
 const backup=new BackupManager(database,root,runtime.databaseUrl);
 const operations=new OperationsService(database,root,async()=>{
   const now=new Date().toISOString(),status=await provider.status();let dockerReady=true,activeContainers=0,orphanedContainers=0;

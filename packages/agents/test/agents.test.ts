@@ -78,6 +78,39 @@ function provider(reviewPass = true): AgentProvider & { roles: string[] } {
   } };
 }
 describe('durable workflow control and evidence', () => {
+  for (const result of ['PASS', 'FAIL', 'EXPIRED'] as const) it(`bounds a separately approved verification window: ${result}`, async () => {
+    const store = new MemoryStore(), model = provider(), sandbox = new FixtureSandbox();
+    await new WorkflowRunner(store, model, sandbox).tick();
+    const originalStart = new Date(Date.now()-20*60_000).toISOString();
+    store.run.fixture = 'how-to-trash-v1'; store.run.status = 'QUEUED';
+    store.run.checkpoint.stage = 'VERIFY'; store.run.checkpoint.startedAt = originalStart;
+    store.run.checkpoint.turns = 5; store.run.checkpoint.rework = 2;
+    store.run.checkpoint.verificationWindow = { approvedAt: new Date(Date.now()-1000).toISOString(),
+      deadlineAt: new Date(Date.now()+(result === 'EXPIRED' ? -1 : 290000)).toISOString(), qaAttemptsRemaining: 1, candidateSha: sandbox.snapshotValue.sha };
+    model.roles.length = 0;
+    if (result === 'FAIL') { const failing = provider(false); model.run = failing.run; model.roles = failing.roles; }
+    await new WorkflowRunner(store, model, sandbox).tick();
+    expect(store.run.checkpoint.startedAt).toBe(originalStart); expect(store.run.checkpoint.rework).toBe(2);
+    expect(model.roles).toEqual(result === 'EXPIRED' ? [] : ['QA']);
+    expect(store.run.status).toBe(result === 'PASS' ? 'WAITING_APPROVAL' : result === 'FAIL' ? 'FAILED' : 'BLOCKED');
+    if (result !== 'EXPIRED') { expect(store.run.checkpoint.turns).toBe(6); expect(store.run.checkpoint.verificationWindow.qaAttemptsRemaining).toBe(0); }
+  });
+  it('routes the admitted repository and gives role-specific real-repository instructions', async () => {
+    const store = new MemoryStore(), target = new FixtureSandbox(), prompts: string[] = [];
+    store.run.fixture = 'how-to-trash-v1';
+    const model = provider(), original = model.run;
+    model.run = async input => { prompts.push(input.prompt); return original(input); };
+    const fixture = new FixtureSandbox();
+    const router: CodeSandbox = { ...fixture, prepare: () => { throw new Error('Wrong fixture'); },
+      snapshot: fixture.snapshot.bind(fixture), apply: fixture.apply.bind(fixture), verify: fixture.verify.bind(fixture), forRun: () => target };
+    await new WorkflowRunner(store, model, router).tick();
+    expect(store.run.status).toBe('WAITING_APPROVAL');
+    expect(prompts).toHaveLength(3);
+    for (const prompt of prompts) {
+      expect(JSON.parse(prompt).instruction).toContain('how-to-trash');
+      expect(JSON.parse(prompt).instruction).not.toContain('fixes add(a,b)');
+    }
+  });
   it('hands PM spec to Developer, verifies exact SHA then QA, waits for owner', async () => {
     const store = new MemoryStore(), model = provider(), sandbox = new FixtureSandbox();
     await new WorkflowRunner(store, model, sandbox).tick();

@@ -45,6 +45,8 @@ P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건
 - [x] P2-04 원자 snapshot/SSE·중복/역순/reload/reset·단절/권한 철회(T05/T13). PG19·동기화 단위8·사무실 브라우저7개 통과.
 - [ ] P2-05 animation/실행 독립성은 브라우저에서 검증했다(그래픽 off·탭 비활성·reduce motion·쓰기 요청0). 전체 B 출시 gate는 언어 비교·범용 저장소 등 잔여 범위 때문에 미완료다. Phase 2 로컬 사무실 검증과 운영 출시를 구분한다.
 
+2026-10-20 실제 저장소 1차: 사용자가 how-to-trash 지역 목록/검색을 선택했다. 고정 commit/admission/image·파일/명령 경계·실제 PM/Developer 수정과 테스트/build·사무실 상태·네 가지 브라우저 기능 흐름을 확인했다. QA 1차 FAIL·원래 15분 시간 종료를 보존하며 최종 QA의 별도 5분/1회 승인 대기다. 자동257=42+80+135 통과, 최종 QA/push 미완료다. 이 시범이나 사용자 Phase5 수락을 B/C 출시·merge/운영 배포 승인으로 확대하지 않는다. README·ADR-019를 따른다.
+
 ## Phase 3 — Collaboration & Recruitment
 
 - [ ] P3-01 App JWT/제한 token·서명 inbox·역순 reconcile 자동 시험 통과. 실제 App 한 저장소 설치·인증 및 ping HTTP202/중복 제거·PROCESSED 1건 확인. 일반 CI webhook의 원격 역순/철회는 미검증.
