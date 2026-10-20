@@ -4,6 +4,8 @@
 
 P5-01과 P5-02의 정상 처리/취소 경로를 구현했다. 아래 초기 설계 중 provider 미선택/미구현이라는 표현은 초기 이력이며, 실제 구현 범위는 이 절과 ADR-016·README 검증 기록을 따른다. 운영 C 출시와 물리 마이크 정확도 검증은 별도다.
 
+실제 마이크 시험에서 웹의 `Permissions-Policy: microphone=()`가 남아 권한 창 전에 NotAllowedError를 내던 문제를 확인했다. 현재 사이트만 요청할 수 있도록 `microphone=(self)`로 수정한다. 카메라·위치·다른 origin 마이크는 차단한다. 브라우저 허용과 앱 동의는 계속 필요하다. 권한 거부/장치 없음/장치 읽기 실패·API/녹음기 미지원과 녹음기 시작 실패를 고정 진단으로 구분하며 원시 장치 오류는 표시하지 않는다. 대역 getUserMedia 시험만으로 문서 정책을 검증했다고 간주하지 않고 실제 header/문서 feature policy 시험을 추가한다. 상세는12장·README 후속 검증을 따른다.
+
 - 공급자: 공식 `ggml-org/whisper.cpp`의 Windows x64 CPU 배포 `b5454`, 다국어 `tiny`. `-ng`, CPU thread2, 한국어 `ko`, shell 없는 고정 executable/인자를 사용한다. 모델/실행 파일은 `.local/voice-runtime`에 설치하며 런타임이 자동 다운로드/업그레이드하지 않는다. 공식 archive SHA-256과 model SHA-1을 설치 때 확인하고 manifest의 개별 executable/DLL/model SHA-256을 서비스 준비 때 대조한다. MIT license 원문 두 개도 설치한다.
 - 비용/전송: 외부 STT·TTS·유료 API fallback 경로가 없다. 모델 다운로드는 GitHub/Hugging Face, 실제 음성 처리는 이 컴퓨터에서 수행한다. 별도 서비스 요금은 예약하지 않으며 CPU/전력·통신 비용은 측정하지 않았다. 원격 공급자의 보관 정책을 로컬 처리에 적용한 것처럼 주장하지 않는다.
 - 상한: canonical PCM WAV 16kHz/mono/16bit, 0.25~30초, 최대960044bytes=44byte header+30000ms×32bytes/ms. 브라우저 원본은 최대2MiB, decode 뒤 30초 초과를 조용히 자르지 않고 거부한다. 동시 native 전사1건, 조직당 UTC 일자20회(실패/취소도 소비), native60초 timeout. 자동 재시도/다른 모델 전환은 없다.
@@ -18,7 +20,7 @@ API: `GET /api/v1/voice/status`, `POST /api/v1/projects/:id/voice/candidates`(au
 
 실행: `pnpm setup:voice`(이미 설치됐다면 hash 대조 후 재사용), `pnpm verify:voice-live`, `pnpm verify:voice-browser`. 실제 전사 시험은 Windows의 설치된 Microsoft Heami Desktop으로 만든 공개 시험 문장이다. 실제 마이크가 아니다. 브라우저 대역 시험의 마이크 거부/track 해제와 실제 STT 호출을 구분한다. 정확도/품질 일반화 근거가 부족해 P5-04 자동 모델 최적화는 도입하지 않는다. TTS·회의/추가 연동(P5-03)은 별도 요구가 없어 평가 후 보류한다.
 
-마이크 UI는 경과 초·입력 신호 유무를 표시하며 신호 감지는 정확도/문장 인식의 증거가 아니다. 탭 숨김/취소/이탈 때 녹음·meter·track을 해제하고 그 녹음을 업로드하지 않는다. FILE/MICROPHONE 표시는 클라이언트의 경로 선언이다. 물리 마이크 시험은 헴이 준비됐다고 알린 뒤 직접 동의·녹음하며, 현재 요청에 따라 대기한다.
+마이크 UI는 경과 초·입력 신호 유무를 표시하며 신호 감지는 정확도/문장 인식의 증거가 아니다. 탭 숨김/취소/이탈 때 녹음·meter·track을 해제하고 그 녹음을 업로드하지 않는다. FILE/MICROPHONE 표시는 클라이언트의 경로 선언이다. 2026-10-20 사용자가 직접 녹음·전사·취소 후 원문 비워짐을 확인했다. 서버의 MIC 입력9480ms/READY→CANCELLED·plaintext=null·task_id=null·생성 시각 이후 새 task/run0·임시 음성0을 대조했다. 시험 문장의 “수정해”→“수상해” 차이가 있어 정확도 일반화를 하지 않는다. 사용자 보고와 서버 상태의 대조이며 물리 장치 정체성을 인증한 것은 아니다. 세부 후보/프로젝트·회귀 범위는 README 후속 기록을 따른다.
 
 공식 확인 경로(2026-10-20 열람): [whisper.cpp README](https://github.com/ggml-org/whisper.cpp), [b5454 배포/해시](https://github.com/ggml-org/whisper.cpp/releases/tag/b5454), [모델 파일·SHA](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md), [Whisper MIT License](https://github.com/openai/whisper/blob/main/LICENSE). 최신 release tag는 v1.9.5였지만 설치는 Windows CPU asset이 공개된 b5454에 고정했다. 원격 문서별 최종 수정일은 별도 확정하지 않았다.
 

@@ -168,6 +168,14 @@
 - 호환/한계: 기존 null 영수증·host 정체성 파일 유실/다른 host는 보수적으로 차단한다. 같은 소유자가 살아 있는 cleanup 실패는 소유자를 자동 종료하지 않는다. UI 입력 경로 선언/입력 신호는 물리 장치 인증/정확도 증거가 아니다. 실제 마이크 시험은 헴의 준비 통보까지 대기한다. 새 유료 API·다운로드·merge·운영 배포는 없다.
 - 공식 확인: Microsoft [Process Handles and Identifiers](https://learn.microsoft.com/en-us/windows/win32/procthread/process-handles-and-identifiers), [GetProcessTimes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes), [CommandLineToArgvW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-commandlinetoargvw), 열람2026-10-20. API 정체성·생성 시각·인자 파싱의 공식 근거이며 앱의 복구 성공은 별도 실제 시험으로 확인한다.
 
+## ADR-018 — 마이크의 same-origin 문서 정책과 실제 사용자 검증 (2026-10-20)
+
+- 문제: Foundation의 `Permissions-Policy: microphone=()`가 남아 실제 getUserMedia 요청을 거부했다. 대역 입력 시험은 이 문서 정책을 통과하지 않아 기존 회귀만으로 발견하지 못했다. 초기 Chrome 설정 안내보다 서버 헤더 대조가 먼저였어야 한다.
+- 결정: 마이크만 `(self)`로 허용한다. 카메라/위치/타 origin 위임은 계속 차단하며 브라우저/OS 권한·사용자 앱 동의·직접 버튼 입력을 대신하지 않는다. 고정 오류 이름으로 권한/장치/API/녹음기 실패를 구분하고 원시 장치 메시지를 표시하지 않는다.
+- 검증: 실제 응답/문서 policy 검사와 오류 비노출/무업로드/track 해제5개를 추가해 Chromium45개를 완주했다. 사용자가 직접 녹음·전사·취소 후 원문 비워짐을 보고했고 서버 MIC9480ms/READY→CANCELLED·plaintext/task_id=null·새 task/run0·임시 파일0과 대조했다. 미사용으로 남은 새 빈 시험 프로젝트만 archive했다.
+- 한계: 정해둔 문장과 “수정해”→“수상해” 차이가 있어 인식 정확도를 일반화하지 않는다. 단일 사용자 입력·서버 대조이며 장치 attestation/다른 OS·소음·장문·운영 개인정보 보관 정책은 별도다. 원시 음성은 검증 후 남기지 않으며 새 유료 API·모델 전환·merge·운영 배포는 없다.
+- 근거: README/12/14/20장·실제 후보 ID·브라우저 회귀·웹 헤더. [W3C Permissions Policy](https://www.w3.org/TR/permissions-policy/) Working Draft 2026-09-22, 열람2026-10-20.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

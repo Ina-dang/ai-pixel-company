@@ -4,7 +4,7 @@
 
 자연어 업무 지시를 PM·Developer·QA AI의 실제 개발 작업으로 연결하고, 검증된 실행 상태를 픽셀 사무실에 표시하는 AI 회사 운영 플랫폼이다.
 
-**현재 상태: Phase 5 로컬 한국어 음성 후보→수정/확인→업무 등록에 Windows 강제 종료 후 소유권 기반 native/WAV 복구를 추가했다. 자동244개·Chromium40개·계약·lint/typecheck/build PASS다. 물리 마이크는 헴의 준비 통보까지 대기한다. 다른 환경/운영 개인정보·TTS/모델 최적화와 기존 off-host/운영 환경·권한 분리·상시 ingress·범용 실행 검증은 남았다. 실제 merge·운영 배포는 미수행이다.**
+**현재 상태: Phase 5 로컬 음성 후보·강제 종료 복구에 이어, 사용자 직접 마이크 녹음→전사→취소·텍스트/파일 정리1건을 확인했다. 앱의 마이크 차단 헤더를 same-origin 허용으로 수정했다. 최종 자동244개(3개 순차 묶음)·Chromium45개·계약·lint/typecheck/build PASS다. 단일 pnpm verify의 중간 실패/시간 제한은 별도 이력으로 보존한다. 전사 오인식·다른 환경/운영 개인정보·기존 운영 C 제한은 남았으며 실제 merge·운영 배포는 미수행이다.**
 
 - B단계: Phase 0 기반 → Phase 1 실제 AI 실행 → Phase 2 픽셀 사무실.
 - C단계: Phase 3 GitHub·Slack·채용 → Phase 4 평가·다중 프로젝트·운영.
@@ -12,7 +12,23 @@
 
 문서 탐색은 [전체 목차](docs/INDEX.md), 개발 원칙은 [프로젝트 지침](docs/PROJECT_INSTRUCTIONS.md)과 [AGENTS.md](AGENTS.md)를 따른다. 구현 순서는 [로드맵](docs/13-development-roadmap.md), 착수 조건과 검증 결과는 [구현 체크리스트](docs/IMPLEMENTATION_CHECKLIST.md)를 참조한다.
 
-## Phase 5 강제 종료 복구 후속 — 2026-10-20
+## Phase 5 실제 마이크 후속 — 2026-10-20
+
+✅ 사용자가 직접 마이크 녹음·전사·취소 후 원문 비워짐을 확인했고 서버 DB와 대조했다. 녹음 후보 `c379521b-965a-4071-8ee6-eee5970eaef6`는 source=MICROPHONE, duration=9480ms이며 9480÷1000=9.48초다. READY/version2 → CANCELLED/version3, transcript=null, task_id=null을 확인했다. 실제로 선택된 시험 프로젝트는 `da360b7c-8d0e-4bbb-9f2b-4f767dddab55`이며, 녹음 생성 시각 이후 새 task/run은0이다. 기존 프로젝트 업무를 삭제하지 않았다. 원시 임시 음성은0개다. 별도로 준비했으나 사용하지 않은 빈 시험 프로젝트 `e0163ab5-a7dc-4997-9611-1a6f46dd2ff2`만 범위 확인 후 ARCHIVED로 정리했다.
+
+원인/수정: 초기 웹 응답의 `Permissions-Policy: camera=(), microphone=(), geolocation=()`가 마이크 요청을 문서 정책에서 거부해 NotAllowedError가 발생했다. Chrome 사이트 설정부터 안내한 것은 서버 헤더를 먼저 확인하지 못한 진단 오류였다. `camera=(), microphone=(self), geolocation=()`로 수정하고 실제 응답·문서 판정에서 자기 origin 마이크만 허용하는 것을 확인했다. 브라우저/OS 사용자 허용과 앱의 명시적 동의는 계속 필요하다. 카메라·위치·다른 origin 마이크는 허용하지 않는다. 새 UI는 권한/장치 없음/장치 읽기·API/녹음기 실패를 고정 진단으로 구분하고 원시 장치 오류 메시지를 노출하지 않는다.
+
+⚠️ 품질: 정해둔 시험 문장의 “제목을 수정해 주세요”가 “제목을 수상해 주세요”로 전사됐다. 연결/정리 성공을 정확도 성공으로 간주하지 않는다. 1회의 사용자 직접 녹음과 서버 metadata 대조 범위이며 장치 정체성 attestation·다른 장치/소음/이름·숫자·장문 정확도는 검증하지 않았다. 실제 마이크 원음을 재생하지 않았고 native 처리 중의 임시 WAV와 후보 텍스트는 취소/정리 후 남기지 않았다. 공개 시험 문장의 차이만 기록한다. 새 유료 API·모델 전환·merge·운영 배포는 없다.
+
+검증 범위: 진단 변경의 lint/typecheck/build와 자동244개를 통과했고, 헤더 수정 뒤 lint/typecheck/build도 다시 통과했다. 대역만으로 마이크 성공을 판단한 기존 검증의 빈틈을 보완해 실제 응답/문서 policy 검사1개와 API 미지원·장치 없음/읽기 실패·녹음기 실패의 비밀 비노출/track 해제4개를 추가했다. 최종 Chromium45=기존40+추가5가 전체 완주했다. 중간 전체 검사 묶음의300초 도구 제한과 개별110/165초 제한에 걸린 시도는 PASS가 아니다. 종료하지 않은 검증 작업이 없음을 확인하고 기존240초 상한의 셸 실행기로 재실행해45개(1.3분) 통과를 확인했다. 앱 코드 오류와 검사 실행 제한을 구분한다. 앞선244/40과 물리 마이크 대기 표시는 당시 수락 이력이다.
+
+공식 확인: [W3C Permissions Policy](https://www.w3.org/TR/permissions-policy/) Working Draft 2026-09-22·열람2026-10-20. 구현 근거는 [웹 헤더](apps/web/next.config.ts)·[마이크 UI](apps/web/app/ui/voice-input.tsx)·[실제 문서 policy 회귀](tests/e2e/voice.spec.ts)다.
+
+마이크 후속의 최종 source digest는 `899fc0d8c0c23c44d5be9209637bec1c9d19c242f9cdb8028821b9e88b99171d`다. 완주한 브라우저45개 근거는 `ee9450a9-d04d-411b-a808-1bcb56e28413` / SHA `955f3d7dec89879b95ea22f5b0a2121998af4f40e1a8adfeccd184f5fe274fc3`이며 Git 제외 `.local/operations-evidence`에 보관한다. 전체 재검사 도중 기존 Docker Sandbox의 same-SHA test/build 시험1건이 실패했고, 같은 코드/제한의 분리 재실행에서는8개 모두 통과했다. 첫 실패의 원인은 확정하지 않았으며, 이 이력을 이후 전체 재실행 성공으로 삭제하거나 PASS로 바꾸지 않는다.
+
+최종 자동 검사는 단일 호출의 실행 제한을 피하기 위해 같은 소스·기대 결과·Sandbox 제한을 유지한 채 순차3묶음으로 실행했다. A=3파일/42개(99.24초), B=4파일/78개(36.70초), C=12파일/124개(32.33초), 합계3+4+12=19파일·42+78+124=244개, 각 exitCode=0이다. 발견한 전체 시험 파일 집합과 세 묶음의 합집합이 같고 중복/누락은0이다. lint/typecheck·TS16/Python26 계약·build도 최종 소스에서 통과했다. 이 결과는 단일 `pnpm verify` 완주 성공을 뜻하지 않는다. 최종 PASS Artifact `43853b89-acb8-427c-b388-070d30ce762d` / SHA `a13dc3d357907fc956a4fc8d575fdb58650fad6860bffb535acaf70152f02758`, 앞선 관측 실패 Artifact `9d1610ad-8db0-45a4-886c-47c1591049eb` / SHA `fb18aaa06d9f4b9c012dd794d5e4bced4011081d41deed97c9906008a903327c`를 함께 보존했다. 원래 운영 C 미승인/미검증 범위를 이 검증으로 해제하지 않는다.
+
+## Phase 5 강제 종료 복구 수락 이력 — 2026-10-20
 
 ✅ PROCESSING과 실행 소유권을 먼저 DB에 commit하고, 재시작/30초 조정에서 host UUID·PID/생성 FILETIME·SID·executable·Windows handle/정확한 argv를 확인한다. 소유 native 종료·대기 후 UUID의 단일 regular audio.wav만 삭제한다. 살아 있는 소유자·구형 영수증·외부 host·junction/hardlink·추가 파일은 보존/차단한다. 자동 최대2회 뒤 Owner의 현재 version·동의로 복구만 재확인하며 전사/업무/run을 replay하지 않는다. UI 복구 이력·차단 사유, 마이크 경과 시간/신호, 숨김/취소 track 해제를 추가했다. 상세는 [ADR-017](docs/17-decision-log.md)·[운영 경계](docs/15-deployment-and-operations.md)다.
 
@@ -122,7 +138,7 @@ GitHub App의 저장소 범위와 Slack의 workspace/channel/Owner 매핑은 서
 | `pnpm test` | 244개 = 기존223 + 복구21. 실제 PostgreSQL·Windows 실행 경계/API 강제 종료·대역과 실제 opt-in STT/기존 연동을 구분 |
 | `pnpm verify:contracts` | TypeScript fixture 16개·Python JSON Schema fixture 26개 통과 |
 | `pnpm build` | Next 프로덕션 빌드·API/공유 패키지 타입 빌드 통과 |
-| `pnpm test:e2e` | Chromium40개 = 기존37 + 복구3. 기존 사무실/승인/운영·음성 회귀와 복구 동의/version·실패 차단 유지·숨김 녹음 폐기 |
+| `pnpm test:e2e` | Chromium45개 = 기존40 + 마이크 진단/정책5. 실제 same-origin 문서 정책·권한/장치/API/녹음기 구분·비밀 비노출·track 해제와 기존 전체 회귀 |
 | `pnpm verify:agents` | Phase 1 실제 구독 PM/Developer/QA, 코드·추가 테스트 파일 수정, test/build exit0, QA PASS. 저장된 실행 수동 재개 성공, 아래 최종 결과는 사용자 지시로 수락 |
 | `pnpm verify:office-live` | 실제 Codex→브라우저 PM 작업/Developer 작업/QA 검토 관측, 동일 SHA test/build0·QA PASS, reload/390px·page error0. 새 결과는 수락 대기 |
 | `pnpm verify:staffing-live` | 실제 신규 Developer 채용/배정·Codex 코드 수정·Docker test/build0·동일 SHA QA PASS, 이름/reload/390px/page error0 확인. Owner 수락 대기 |

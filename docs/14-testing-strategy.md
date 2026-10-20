@@ -1,5 +1,13 @@
 # 테스트·품질·에이전트 평가
 
+## Phase 5 실제 마이크 후속 — 2026-10-20
+
+사용자 직접 녹음/전사/취소 후 원문 비워짐 보고를 서버 후보 `c379521b-965a-4071-8ee6-eee5970eaef6`와 대조했다. MIC 선언9480ms=9.48초, READY/v2→CANCELLED/v3·transcript=null·task_id=null, 해당 녹음 이후 새 task/run0·임시 WAV0이다. 물리 장치 ID/원음을 따로 수집하지 않아 장치 attestation을 주장하지 않는다. “수정해”→“수상해” 차이가 있어 단일 시험의 연결 성공과 인식 정확도를 구분한다.
+
+이 과정에서 웹의 microphone=() 문서 정책이 NotAllowedError를 유발하던 원인을 발견해 self로 고쳤다. 실제 header와 문서 feature policy의 자기 origin 허용·타 origin/카메라/위치 차단을 검사1개로 묶고 API 미지원·NotFound/NotReadable·녹음기 실패의 무업로드/track 해제·원시 오류 비노출4개를 추가했다. 전체 Chromium45=기존40+5가 완주했다. 중간 실행의 도구/110초/165초 제한은 PASS로 취급하지 않으며, 잔여 검증 프로세스 확인 후 기존240초 셸 실행에서45개(1.3분) 성공했다. 시점별 자동244·계약/lint/typecheck/build·source digest 근거는 README를 따른다. 아래 물리 마이크 미실행 표시는 앞선 수락 시점의 이력이다.
+
+최종 자동244개는 원래19파일을 A(3파일/42개), B(4파일/78개), C(12파일/124개)로 순차 분할해 각 exit0을 확인했다. 3+4+12=19, 42+78+124=244이며 파일 집합 대조로 누락/중복0이다. 이 실행은 단일 pnpm verify 시간 제한을 성공으로 바꾼 것이 아니다. 앞선 Docker same-SHA 시험1회 실패(원인 미확정)·분리8개 성공·최종 세 묶음 성공을 구분한다. 코드·기대 결과·실제 Docker 실행/제한을 바꾸거나 시험을 건너뛰지 않았다. 최종 source digest는 `899fc0d8c0c23c44d5be9209637bec1c9d19c242f9cdb8028821b9e88b99171d`, PASS `43853b89-acb8-427c-b388-070d30ce762d` / 관측 FAIL `9d1610ad-8db0-45a4-886c-47c1591049eb` / browser `ee9450a9-d04d-411b-a808-1bcb56e28413`의 세 근거를 함께 보존한다. 계약/lint/typecheck/build도 최종 소스에서 통과했다.
+
 ## Phase 5 강제 종료 후속 검증 — 2026-10-20
 
 최종 자동244=기존223+복구21, Chromium40=기존37+복구3, lint/typecheck·TS16/Python26 계약·build PASS다. source digest `74b9f1e099da86d833193f70f14f010221cfe017e25239d61ebf785dc992fecb`의 자동/브라우저 증거는 각각 `ece853e4-9719-460c-a432-025b35799aec` / `a1a032a1-0002-4bac-9787-7f0ab4235b5e`다. 아래223/37은 앞서 수락한1차 이력이다.

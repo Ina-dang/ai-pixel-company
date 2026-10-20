@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-P5-01/02-L 수락 뒤 Windows 강제 종료 후 native/WAV 복구·화면 재확인을 추가했다. 최종 자동244=기존223+복구21, Chromium40=기존37+복구3과 TS16/Python26 계약·lint/typecheck/build PASS다. 실제 API 강제 종료2건과 Windows 소유권/종료·파일 경계를 구분해 검증했다. 물리 마이크는 헴의 준비 통보까지 대기한다. 다른 OS/noise/장문·운영 개인정보 정책·TTS/모델 최적화·기존 off-host/운영 환경·host supervisor 분리·상시 ingress·범용 실행은 남았다. 실제 merge·운영 배포·새 유료 자원 생성은 수행하지 않았다. 최신 실제 연동/복원·근거는 README·ADR-017을 따른다.
+P5-01/02-L·Windows 복구 수락 뒤, 2026-10-20 실제 사용자 마이크1건의 녹음/전사/취소·텍스트/파일 정리를 서버와 대조했다. 앱의 마이크 차단 헤더를 self로 수정했다. 최종 자동244=42+78+124(19파일/순차3묶음)·Chromium45=기존40+진단/정책5·TS16/Python26 계약/lint/typecheck/build PASS다. 단일 명령 시간 제한과 중간 Docker 실패를 보존하며 README의 시점별 근거를 따른다. 전사 오인식·다른 환경/운영 개인정보·기존 운영 C 제한은 남았고 실제 merge·운영 배포·새 유료 자원은 미수행이다.
 
 ## Phase 0 — Foundation
 
@@ -73,7 +73,7 @@ P5-01/02-L 수락 뒤 Windows 강제 종료 후 native/WAV 복구·화면 재확
 
 - [x] P5-01 공식 배포/모델 hash·MIT 확인 후 로컬 whisper.cpp/tiny STT 후보→수정/확인→기존 공통 task command(T20). 일반 task POST의 VOICE 위조 거부·source/version/원문·수정 감사 연결.
 - [x] P5-02-L 정상 처리/취소의 임시 WAV 삭제·동의·만료·30초/동시1/UTC일20회/60초 timeout·권한 재검사·위험 별도 승인(T20). 실제 native 취소/close, 원시 파일0, 수정 확인 뒤 TODO/자동 run0 확인. 유료 fallback/자동 retry 없음.
-- [ ] P5-02-H 전체 host 검증: Windows 강제 종료 뒤 소유권 기반 native/WAV 복구는 구현·시험 완료(ADR-017). 물리 microphone은 헴의 준비 통보까지 대기. 다른 OS·브라우저/noise/장문·운영 metadata 보관 정책은 남음. 불명 소유권/구형 영수증은 후속 STT 차단/수동 확인 유지.
+- [ ] P5-02-H 전체 host 검증: Windows 강제 종료 뒤 소유권 기반 native/WAV 복구는 구현·시험 완료(ADR-017). 2026-10-20 사용자 직접 물리 microphone의 녹음/전사/취소·plaintext/파일 정리1건은 서버와 대조 완료. 앱의 microphone=() 헤더를 self로 수정했다. 단일 문장의 오인식이 있어 정확도 일반화·다른 OS/브라우저/noise/장문·운영 metadata 정책은 남음. 불명 소유권/구형 영수증은 후속 STT 차단/수동 확인 유지.
 - [x] P5-03 범위 평가: TTS·고급 조직/회의/추가 연동은 별도 요구가 없어 보류. 실제 구현/출시 완료 표시는 하지 않음.
 - [ ] P5-04 자동 모델/비용 최적화는 품질/성공률·rollback 근거 후 도입.
 

@@ -78,7 +78,14 @@ export function VoiceInput({ projectId, session, onCandidate, onBusy }: { projec
   }
   async function start() {
     if (!consent || busy || candidate || recording) return;
+    if (!window.isSecureContext || typeof navigator.mediaDevices?.getUserMedia !== 'function') {
+      setMessage('이 브라우저에서 마이크 요청 API를 사용할 수 없습니다 (MICROPHONE_API_UNAVAILABLE). Chrome에서 http://127.0.0.1:3000 페이지를 열어 주세요. 텍스트 입력이나 음성 파일도 사용할 수 있습니다.'); return;
+    }
+    if (typeof MediaRecorder !== 'function') {
+      setMessage('이 브라우저에서 음성 녹음을 지원하지 않습니다 (RECORDER_UNAVAILABLE). 텍스트 입력이나 음성 파일을 사용하세요.'); return;
+    }
     const generation = ++recordingGeneration.current;
+    let stage: 'MICROPHONE' | 'RECORDER' = 'MICROPHONE';
     try {
       const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       if (!alive.current || generation !== recordingGeneration.current) { media.getTracks().forEach(track => { track.stop(); }); return; }
@@ -94,13 +101,34 @@ export function VoiceInput({ projectId, session, onCandidate, onBusy }: { projec
         meter.current.frame=requestAnimationFrame(measure);
       } catch { if (inputContext) await inputContext.close().catch(() => undefined); }
       if (!alive.current || generation !== recordingGeneration.current) { release(); return; }
+      stage = 'RECORDER';
       const capture = new MediaRecorder(media), chunks: Blob[] = []; let bytes = 0;
       recorder.current = capture;
       capture.ondataavailable = event => { bytes += event.data.size; if (bytes <= 2_097_152) chunks.push(event.data); else if (capture.state === 'recording') capture.stop(); };
       capture.onstop = () => { release(); if (alive.current) { setRecording(false); callbacks.current.onBusy(false); if (generation === recordingGeneration.current) void upload(new Blob(chunks, { type: capture.mimeType }), 'MICROPHONE'); } chunks.length = 0; };
       capture.onerror = () => { recordingGeneration.current++; release(); setRecording(false); callbacks.current.onBusy(false); setMessage('녹음을 계속할 수 없습니다. 텍스트로 입력해 주세요.'); };
       capture.start(1000); setRecording(true); callbacks.current.onBusy(true); setMessage('녹음 중 · 최대 30초'); timer.current = setTimeout(() => { if (capture.state === 'recording') capture.stop(); }, 30_000);
-    } catch { release(); if (alive.current) { setRecording(false); callbacks.current.onBusy(false); setMessage('마이크가 허용되지 않았거나 지원되지 않습니다. 텍스트 입력이나 음성 파일을 사용하세요.'); } }
+    } catch (error) {
+      release();
+      if (alive.current) {
+        setRecording(false); callbacks.current.onBusy(false);
+        // Fixed, allowlisted diagnostics only. Native messages can contain private device details.
+        const name = error instanceof Error ? error.name : 'UNKNOWN';
+        const messages: Record<string, string> = {
+          NotAllowedError: '마이크 접근이 거부됐습니다 (NotAllowedError). Chrome의 이 사이트 마이크 권한과 Windows 마이크 접근 설정을 확인하세요.',
+          SecurityError: '브라우저 보안 설정이 마이크 접근을 막았습니다 (SecurityError). 이 사이트의 마이크 권한을 확인하세요.',
+          NotFoundError: '사용할 수 있는 마이크를 찾지 못했습니다 (NotFoundError). 마이크 연결과 Windows 기본 입력 장치를 확인하세요.',
+          DevicesNotFoundError: '사용할 수 있는 마이크를 찾지 못했습니다 (DevicesNotFoundError). 마이크 연결과 Windows 기본 입력 장치를 확인하세요.',
+          NotReadableError: '마이크 장치를 열지 못했습니다 (NotReadableError). 다른 녹음 앱의 사용 여부와 Windows 입력 장치를 확인하세요.',
+          TrackStartError: '마이크 장치를 열지 못했습니다 (TrackStartError). 다른 녹음 앱의 사용 여부와 Windows 입력 장치를 확인하세요.',
+          OverconstrainedError: '마이크 입력 조건을 만족하는 장치가 없습니다 (OverconstrainedError). 기본 입력 장치를 확인하세요.',
+          AbortError: '마이크 입력 시작이 중단됐습니다 (AbortError). 장치를 확인한 뒤 직접 다시 시도하세요.',
+          NotSupportedError: '브라우저의 녹음 형식을 지원하지 않습니다 (NotSupportedError). Chrome에서 다시 확인하세요.',
+        };
+        const diagnostic = Object.hasOwn(messages, name) ? messages[name] : `${stage === 'RECORDER' ? '음성 녹음기를' : '마이크 입력을'} 시작하지 못했습니다 (UNKNOWN). 원인 확인이 필요합니다.`;
+        setMessage(`${diagnostic} 텍스트 입력이나 음성 파일을 사용할 수 있습니다.`);
+      }
+    }
   }
   async function cancel() {
     recordingGeneration.current++; cancelRequested.current = true; release(); if (recorder.current?.state === 'recording') recorder.current.stop(); setRecording(false);
