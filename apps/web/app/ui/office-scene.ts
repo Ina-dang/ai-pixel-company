@@ -166,13 +166,13 @@ export function createOfficeScene(parent: HTMLElement, callbacks: Callbacks): Of
       const body = this.add.container(point.x, point.y).setDepth(point.y + 10);
       const shadow = this.add.ellipse(0, 3, 27, 9, 0x263735, 0.16);
       const marker = this.add.ellipse(0, 2, 36, 15).setStrokeStyle(2, 0x5750cb).setVisible(false);
-      const sprite = this.add.sprite(0, 0, 'office-staff', `${agent.id}:idle:0`).setOrigin(0.5, 0.95);
+      const sprite = this.add.sprite(0, 0, 'office-staff', `${agent.id}:idle:0`).setOrigin(0.5, 0.95).setScale(1.25);
       const label = document.createElement('div');
       label.className = 'office-agent-label';
       label.dataset.role = agent.role === 'DEVELOPER' ? 'DEV' : agent.role;
       labels.append(label);
-      const stateDot = this.add.circle(0, -45, 3, STATE_COLORS[agent.state]);
-      const target = this.add.rectangle(0, -11, 54, 67, 0xffffff, 0).setInteractive({ useHandCursor: true });
+      const stateDot = this.add.circle(0, -55, 3, STATE_COLORS[agent.state]);
+      const target = this.add.rectangle(0, -18, 54, 82, 0xffffff, 0).setInteractive({ useHandCursor: true });
       const visual: Visual = { data: agent, body, sprite, marker, label, stateDot, path: [], target: point, completeUntil: 0 };
       target.on('pointerdown', () => { if (!destroyed) callbacks.onSelect(agent.id); });
       body.add([shadow, marker, sprite, stateDot, target]);

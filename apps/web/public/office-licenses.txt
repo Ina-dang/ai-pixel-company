@@ -1,4 +1,4 @@
-AI Pixel Company original office v3
+AI Pixel Company original office v4
 
 Current artwork and presentation:
   Tiles, furniture, characters and layout are original procedural AI Pixel
@@ -6,6 +6,8 @@ Current artwork and presentation:
   paid asset packs or image-generation APIs are used.
   Room names, employee labels and activity text are HTML.
   The former pixel-agents palette adaptation has been removed from this version.
+  The user-provided reference images informed only color, contrast and scale.
+  No pixels, sprites or third-party asset packs from those images are bundled.
 
 Rendering dependency: Phaser 3.90.0
   https://github.com/phaserjs/phaser

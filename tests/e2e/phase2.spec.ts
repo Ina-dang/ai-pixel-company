@@ -176,7 +176,7 @@ test('original office keeps HTML labels readable and selected activity tied to s
   await loginOffice(page);
   const office = page.getByRole('region', { name: '픽셀 사무실', exact: true });
   await expect(office).toHaveAttribute('data-office-state', 'ready');
-  await expect(office.locator('[data-office-style="original-v3"] canvas')).toHaveCount(1);
+  await expect(office.locator('[data-office-style="original-v4"] canvas')).toHaveCount(1);
   await expect(office.locator('.office-agent-label')).toHaveCount(3);
   await expect(office.locator('.office-room-labels span')).toHaveCount(5);
   const speech = office.getByRole('note', { name: '선택 직원 현재 활동', exact: true });

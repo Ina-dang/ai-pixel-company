@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 // Original, code-drawn artwork and layout dedicated to CC0-1.0. No downloaded art.
 export const OFFICE_ART_PROVENANCE = {
-  id: 'ai-pixel-office-original-v3',
+  id: 'ai-pixel-office-original-v4',
   license: 'CC0-1.0',
   source: 'Original AI Pixel Company procedural Canvas2D pixel art',
   thirdPartyImages: false,
@@ -11,7 +11,7 @@ export const OFFICE_ART_PROVENANCE = {
 export const STAFF_STATES = ['idle', 'walk', 'type', 'review', 'wait', 'error', 'complete'] as const;
 export type StaffAnimation = typeof STAFF_STATES[number];
 export const STAFF_ROLES = ['PM', 'DEVELOPER', 'QA'] as const;
-const roleClothes = { PM: '#7585a9', DEVELOPER: '#4b9185', QA: '#bd926d' } as const;
+const roleClothes = { PM: '#d59658', DEVELOPER: '#4dafa1', QA: '#7397c8' } as const;
 
 function rectangle(context: CanvasRenderingContext2D, color: string, x: number, y: number, width: number, height: number) {
   context.fillStyle = color;
@@ -22,42 +22,44 @@ function tile(context: CanvasRenderingContext2D, id: number) {
   const r = (color: string, x: number, y: number, width: number, height: number) => rectangle(context, color, x, y, width, height);
   const wood = (base: string, line: string) => {
     r(base, 0, 0, 32, 32);
-    r(line, 0, 0, 32, 1); r(line, 0, 16, 32, 1);
-    r(line, id % 2 ? 9 : 23, 0, 1, 16); r(line, id % 2 ? 24 : 8, 16, 1, 16);
-    r('#ffffff0c', 2, 3, 19, 1); r('#ffffff0c', 14, 20, 15, 1);
+    r(line, 0, 15, 32, 1); r(line, 0, 31, 32, 1);
+    r(line, id % 2 ? 8 : 24, 0, 1, 15); r(line, id % 2 ? 24 : 8, 16, 1, 15);
+    r('#edc28b25', 2, 1, 25, 1); r('#edc28b25', 12, 17, 17, 1);
+    r('#392e2220', 5, 9, 9, 1); r('#392e2220', 20, 25, 8, 1);
   };
-  if (id === 1 || id === 2) { wood(id === 1 ? '#dfc2a0' : '#e3c7a5', '#c9a783'); return; }
+  if (id === 1 || id === 2) { wood(id === 1 ? '#a7764d' : '#af7d52', '#805638'); return; }
   if (id === 3 || id === 4) {
-    r(id === 3 ? '#e7e6d9' : '#c5d9cf', 0, 0, 32, 32);
-    r(id === 3 ? '#d9d8ca' : '#b7ccc1', 0, 31, 32, 1);
-    r(id === 3 ? '#d9d8ca' : '#b7ccc1', 31, 0, 1, 32);
-    r('#ffffff18', 0, 0, 32, 1); return;
+    r(id === 3 ? '#53656a' : '#42737a', 0, 0, 32, 32);
+    r(id === 3 ? '#46595d' : '#355f66', 0, 31, 32, 1);
+    r(id === 3 ? '#46595d' : '#355f66', 31, 0, 1, 32);
+    r('#d6e9dc18', 1, 1, 30, 1); return;
   }
-  if (id === 5) { wood('#c9a585', '#b38e70'); return; }
+  if (id === 5) { wood('#986442', '#784c34'); return; }
   if (id === 7) {
     // A continuous vertical wall, rather than a horizontal skirting tile repeated down a column.
-    r('#ece8df', 0, 0, 32, 32);
-    r('#faf8f1', 0, 0, 4, 32); r('#cbc9bf', 28, 0, 4, 32);
+    r('#24333f', 0, 0, 32, 32);
+    r('#3f5260', 0, 0, 3, 32); r('#13212c', 27, 0, 5, 32);
+    r('#526671', 3, 0, 1, 32);
     return;
   }
   if ([6, 8, 29, 30].includes(id)) {
-    r('#ece8df', 0, 0, 32, 32); r('#faf8f1', 0, 0, 32, 4);
-    r('#cbc9bf', 0, 28, 32, 4);
+    r('#263744', 0, 0, 32, 32); r('#4c6470', 0, 0, 32, 3);
+    r('#192a36', 0, 27, 32, 5); r('#3e535e', 0, 25, 32, 2);
     if (id === 29) {
-      r('#878f92', 1, 3, 30, 19); r('#d0e6e6', 3, 4, 26, 15);
-      r('#b5d8db', 4, 5, 10, 12); r('#a0c8c9', 17, 5, 10, 12);
-      r('#f7fbef', 14, 4, 3, 15); r('#f7fbef', 3, 11, 26, 2);
-      r('#fff9ee', 0, 20, 32, 3);
+      r('#172b38', 1, 3, 30, 21); r('#86b4bd', 3, 4, 26, 17);
+      r('#a5d9d5', 4, 5, 10, 13); r('#65a3b2', 17, 5, 10, 13);
+      r('#c7e5d7', 14, 4, 3, 17); r('#d6ecdf', 3, 11, 26, 2);
+      r('#4c6874', 0, 22, 32, 3);
     }
     return;
   }
   if (id === 9) {
-    r('#b5c7bd', 0, 0, 32, 32); r('#adbdaf', 0, 0, 32, 2);
-    r('#c8d6c9', 3, 4, 2, 2); r('#c8d6c9', 19, 20, 2, 2); return;
+    r('#315464', 0, 0, 32, 32); r('#294b5a', 0, 0, 32, 2);
+    r('#487486', 3, 4, 2, 1); r('#487486', 19, 20, 2, 1); return;
   }
   if (id === 28) {
-    r('#e7e6d9', 0, 0, 32, 32); r('#8f9e96', 1, 5, 30, 22);
-    for (let y = 8; y < 26; y += 4) r('#c1c8b6', 3, y, 26, 1);
+    r('#a67a53', 0, 0, 32, 32); r('#b58b61', 0, 0, 32, 2);
+    r('#805e44', 0, 29, 32, 3); r('#cbab7c', 2, 4, 28, 1);
     return;
   }
   if (id === 10) {
@@ -67,21 +69,21 @@ function tile(context: CanvasRenderingContext2D, id: number) {
     r('#f1e8ce', 24, 13, 4, 3); r('#846e50', 8, 24, 4, 2); r('#846e50', 20, 24, 4, 2); return;
   }
   if (id === 14) {
-    r('#23353b24', 2, 29, 28, 3); r('#48565c', 3, 1, 26, 29); r('#71817e', 5, 2, 22, 2);
+    r('#18232e55', 2, 29, 28, 3); r('#2b424e', 3, 1, 26, 29); r('#6a8c96', 5, 2, 22, 2);
     for (let row = 0; row < 3; row++) {
       const y = 6 + row * 8;
-      r('#27393e', 6, y, 20, 6); r('#718783', 8, y + 2, 10, 1);
-      r('#b3ce9d', 21, y + 2, 2, 2); r('#c5b984', 24, y + 2, 1, 2);
+      r('#172e3b', 6, y, 20, 6); r('#4c7c91', 8, y + 2, 10, 1);
+      r('#6cdbb4', 21, y + 2, 2, 2); r('#d8b967', 24, y + 2, 1, 2);
     }
     return;
   }
   if ([11, 12, 13].includes(id)) {
     r('#232a4022', 1, 26, 30, 6); r('#956947', 4, 25, 4, 5); r('#956947', 24, 25, 4, 5);
-    r('#a6734d', 0, 15, 32, 13); r('#c99466', 0, 12, 32, 13); r('#edc396', 1, 12, 30, 2);
-    r('#dcae7e', 0, 14, 32, 2); r('#986e51', 0, 25, 32, 2);
+    r('#674a35', 0, 15, 32, 15); r('#b88755', 0, 12, 32, 13); r('#f0ca8a', 0, 12, 32, 2);
+    r('#dca96d', 0, 14, 32, 2); r('#785638', 0, 25, 32, 2); r('#392f2c', 0, 29, 32, 2);
     if (id === 12) {
-      r('#424858', 7, 1, 19, 13); r('#1d2937', 9, 3, 15, 9);
-      r('#8cb9a8', 11, 5, 9, 1); r('#d9dcbe', 11, 7, 5, 1); r('#677c94', 11, 9, 10, 1);
+      r('#182935', 6, 0, 21, 15); r('#39576b', 8, 2, 17, 11);
+      r('#6adcb4', 10, 4, 11, 1); r('#8cbadd', 10, 7, 7, 1); r('#d7c57e', 10, 10, 12, 1);
       r('#454c58', 15, 14, 3, 3); r('#777a77', 11, 17, 11, 2);
       r('#e9e5d5', 7, 20, 17, 3); r('#b7b8b1', 9, 21, 12, 1);
     } else if (id === 11) {
@@ -93,7 +95,8 @@ function tile(context: CanvasRenderingContext2D, id: number) {
     return;
   }
   if (id === 15) {
-    r('#283748', 8, 4, 17, 21); r('#4e706b', 10, 6, 13, 11); r('#668b7d', 10, 19, 13, 6);
+    r('#182c38', 8, 4, 17, 21); r('#408d88', 10, 6, 13, 11); r('#55b1a0', 10, 19, 13, 6);
+    r('#76ccba', 11, 6, 11, 2);
     r('#283748', 6, 19, 3, 8); r('#283748', 25, 19, 3, 8);
     r('#45525c', 15, 26, 3, 5); r('#45525c', 7, 29, 20, 2); return;
   }
@@ -126,10 +129,10 @@ function tile(context: CanvasRenderingContext2D, id: number) {
     return;
   }
   if ([23, 24, 25].includes(id)) {
-    r('#28333e22', 0, 28, 32, 4); r('#507569', 0, 2, 32, 26); r('#7a9f88', 2, 4, 28, 12);
-    r('#94b098', 2, 5, 28, 2); r('#9bb59b', 2, 18, 28, 8); r('#406353', 0, 27, 32, 3);
-    if (id === 23) { r('#628779', 0, 9, 6, 18); r('#d6b59e', 10, 7, 11, 10); r('#e2c8ab', 11, 8, 9, 1); }
-    if (id === 25) { r('#628779', 26, 9, 6, 18); r('#cfab93', 11, 8, 10, 9); }
+    r('#18243055', 0, 28, 32, 4); r('#593e59', 0, 2, 32, 26); r('#885775', 2, 4, 28, 12);
+    r('#b17b92', 2, 5, 28, 2); r('#a96786', 2, 18, 28, 8); r('#3d3247', 0, 27, 32, 3);
+    if (id === 23) { r('#774d6c', 0, 9, 6, 18); r('#d0a76a', 10, 7, 11, 10); r('#ebcb8c', 11, 8, 9, 1); }
+    if (id === 25) { r('#774d6c', 26, 9, 6, 18); r('#cf9c70', 11, 8, 10, 9); }
     return;
   }
   if (id === 26) {

@@ -82,7 +82,7 @@ export function PixelOffice({ projectId, agents: input, connection, syncedAt, on
     </div>
     <div className={`office-visual ${state === 'ready' ? 'is-ready' : ''}`}>
       <div className="office-plan">
-        <div ref={mount} className="office-canvas" data-office-style="original-v3" aria-hidden="true" />
+        <div ref={mount} className="office-canvas" data-office-style="original-v4" aria-hidden="true" />
         {state === 'ready' && <div className="office-room-labels" aria-hidden="true">{OFFICE_ROOM_LABELS.map(room => <span className="office-room-label" key={room.name} style={{ left: `${room.x / 896 * 100}%`, top: `${room.y / 512 * 100}%` }}>{room.name}</span>)}</div>}
       </div>
       {state !== 'ready' && <div className="office-fallback" role="status"><span className="office-fallback-mark" aria-hidden="true">▦</span><strong>{state === 'loading' ? '사무실 문을 여는 중…' : state === 'off' ? '직원 상태를 텍스트로 보고 있어요' : '직원 목록으로 계속 확인할 수 있어요'}</strong><p>{!hasAgents ? '서버의 직원 상태를 확인하고 있습니다.' : '업무 실행과 결과는 아래 직원 상세에서 확인하세요.'}</p>{state === 'fallback' && hasAgents && <button type="button" className="button secondary" onClick={() => setRetry(value => value + 1)}>그래픽 다시 불러오기</button>}</div>}

@@ -2,7 +2,11 @@
 
 ## 실제 저장소 1차 검증 — 2026-10-20
 
-how-to-trash는 기준 commit `e98a537cada650e64a29b5e25c5cf6e94f5ced0f`의 원래 빌드0/미구현 helper 시험 실패를 먼저 확인했다. 실제 Developer 후보에는 고정 외부 수용 검사와 Developer가 추가한 node:test를 별도로 실행했다. artifact의 같은 SHA에 테스트/build0, lint/tsc를 연결하며 UI·모델이 최종 상태를 결정하지 않는다. QA가 브라우저와 개별 명령 근거 부족을 FAIL로 남긴 뒤, 이를 보완하는 과정에서 원래15분 제한이 끝났다. 최종 QA의 추가5분/1회는 Owner 승인 전 실행하지 않는다. 기존 token/turn/rework/startedAt·이전 FAIL은 보존한다.
+how-to-trash는 기준 commit `e98a537cada650e64a29b5e25c5cf6e94f5ced0f`의 원래 빌드0/미구현 helper 시험 실패를 먼저 확인했다. 실제 Developer 후보에는 고정 외부 수용 검사와 Developer가 추가한 node:test를 별도로 실행했다. artifact의 같은 SHA에 테스트/build0, lint/tsc를 연결하며 UI·모델이 최종 상태를 결정하지 않는다. QA가 브라우저와 개별 명령 근거 부족을 FAIL로 남긴 뒤, 이를 보완하는 과정에서 원래15분 제한이 끝났다. 기존 token/turn/rework/startedAt·이전 FAIL은 보존한다.
+
+2026-10-21 Owner 승인 뒤 추가 300초 창·QA 1회만 사용해 최종 PASS를 확인했다. 같은 SHA의 node:test 6개·고정 수용 검사·eslint·별도 tsc·Next build와 브라우저 네 조건을 연결했다. 입력/초기화/링크 높이는 각각 50px, 키보드 focus outline은 solid 2px였다. 총 turn6·rework2·원래 startedAt는 보존했고 추가 QA 잔여는 0회다. 실제 결과는 WAITING_APPROVAL, target branch commit `7b07edc` push이며 수락/merge/운영 배포는 미수행이다.
+
+같은 날 사무실 레퍼런스 후속은 관련 단위·동기화 10개/브라우저 8개와 lint/typecheck/build를 확인했다. 직접 제작 그래픽의 대비·크기·HTML 라벨만 변경했으며 실제 서버 PM WAITING / Developer IDLE / QA IDLE과 대조했다. 이전 Chrome 번들을 새로고침한 뒤 `original-v4` 로드를 확인한다. 아래 전체 257개·Chromium47개는 앞선 시점의 전체 회귀 이력이다.
 
 자동257개는 A(3파일/42), B(4파일/80), C(13파일/135)의 순차 검사다. 3+4+13=20파일, 42+80+135=257이다. source pin·경로/의존성/자산·JSONB 키 순서·다른 저장소/구독 우회·원본 예산을 유지한 재검증·만료/QA1회/실패 후 재작업 금지를 포함한다. 브라우저는 1440/375px × 키 없음/SDK 차단으로 실제 search/reset/focus/detail을 검사하고, 기존 404 UI stylesheet Event는 원래 commit에서도 재현해 범위 밖 한계로 보존한다. 기능 경로 오류0은 전체 사이트 오류0을 의미하지 않는다. UI 회귀의 초기 selector 중복과 인증429는 별도 실패 이력이며 운영 로그인 제한을 완화하지 않는다. 최종 회귀/QA/push 판정은 README를 따른다.
 

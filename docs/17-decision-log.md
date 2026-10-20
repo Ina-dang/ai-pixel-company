@@ -182,7 +182,8 @@
 - 결정: npm lock 의존성 준비는 ignore-scripts로 분리하고 후보 실행은 offline/non-root/read-only root/제한 Docker에서 수행한다. 이미지/데이터/지도/설정/lock/자산 변경을 차단하며 binary도 검사한다. 저장소 source는 DB 불변 필드이며 prompt에서 생략한 큰 데이터도 후보 SHA와 검사에 포함한다.
 - 브라우저: 같은 후보의 network=none preview에 loopback GET/HEAD 중계로 접근한다. 호스트 credentials는 전달하지 않고 중계 외 브라우저 origin과 service worker를 차단한다. 실제 키 없는 경우와 비밀이 아닌 dummy key로 SDK 요청을 차단한 경우를 구분한다. remote Kakao의 실제 장애를 관측한 것으로 주장하지 않는다.
 - 예산/상태: 기본15분·7turn·500k token·재작업2·구독 quota/유료 credits 차단을 유지한다. 같은 후보 재검증은 기존 usage/turn/rework/startedAt를 보존한다. 시간 종료 뒤 Owner가 명시적으로 요청하는 별도5분 창은 해당 SHA·QA1회에만 묶이며 code generation/rework/반복 연장을 허용하지 않는다. 실제 승인 전에는 활성화하지 않는다.
-- 검증/판정: 실제 PM/Developer·test/build와 브라우저 기능을 확인했다. QA 1차의 근거 부족 FAIL 및 중간 검사 오류는 보존한다. 원래 404 UI의 stylesheet Event도 별도 baseline으로 재현했다. 최종 QA 승인 대기이며 작업 완료/수락/push/출시로 기록하지 않는다. 이전 Phase5의 실제 마이크 수락과 독립된 범위다.
+- 2026-10-20 검증/판정: 실제 PM/Developer·test/build와 브라우저 기능을 확인했다. QA 1차의 근거 부족 FAIL 및 중간 검사 오류는 보존한다. 원래 404 UI의 stylesheet Event도 별도 baseline으로 재현했다. 당시 최종 QA 승인 대기였으며 완료/수락/push/출시로 기록하지 않았다. 이전 Phase5의 실제 마이크 수락과 독립된 범위다.
+- 2026-10-21 검증 후속: Owner가 추가5분·QA1회를 승인했다. 같은 후보 `ae2afa1c…`에서 test6·lint/tsc/build·브라우저4조건과 QA PASS를 확인했다. 창 승인08:18:11.543→관측완료08:20:06.790 KST, 115.247초≤300초다. 원래 startedAt·rework2·사용량을 보존했고 총turn6·추가QA잔여0이다. target `codex/region-search` commit `7b07edc`를 push했으며 DB는 WAITING_APPROVAL로 남겼다. 별도 앱 결과 수락·merge·운영 배포는 수행하지 않았다. 최초 FAIL 이력과 404 baseline 한계도 유지한다.
 - 한계: 단일 승인 저장소/기준 commit/Next.js npm 잠금 파일·정해진 경로에 한정된다. GitHub App의 대상 저장소 권한/CI/merge 범위를 확장하지 않았다. 범용 저장소·언어 비교·운영 C·실제 merge/운영 배포는 여전히 별도다.
 
 ## 변경 규칙
