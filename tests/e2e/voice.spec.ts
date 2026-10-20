@@ -17,3 +17,39 @@ test('denied microphone falls back to text and cannot submit a transcript',async
 test('microphone cancellation releases every captured track and submits no audio',async({page})=>{await page.addInitScript(()=>{Object.assign(window,{voiceTrackStops:0});Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value:async()=>({getTracks:()=>[{stop:()=>{const w=window as unknown as {voiceTrackStops:number};w.voiceTrackStops++;}}]})});class Capture {state='inactive';mimeType='audio/webm';onstop:(()=>void)|null=null;ondataavailable:unknown=null;onerror:unknown=null;start(){this.state='recording';}stop(){this.state='inactive';this.onstop?.();}}Object.assign(window,{MediaRecorder:Capture});});const s=await fixture(page);await page.getByRole('checkbox',{name:/이 컴퓨터에서 음성을 처리/}).check();await page.getByRole('button',{name:'마이크로 입력'}).click();await expect(page.getByText('녹음 중 · 최대 30초',{exact:true})).toBeVisible();await page.getByRole('button',{name:'음성 후보 취소·삭제'}).click();expect(await page.evaluate(()=>(window as unknown as {voiceTrackStops:number}).voiceTrackStops)).toBe(1);expect(s.writes).toEqual([]);expect(s.errors).toEqual([]);});
 test('390px layout keeps unavailable speech as a text fallback with no horizontal overflow',async({page})=>{await page.setViewportSize({width:390,height:844});const s=await fixture(page,false);await page.getByRole('checkbox',{name:/이 컴퓨터에서 음성을 처리/}).check();await expect(page.getByRole('button',{name:'마이크로 입력'})).toBeDisabled();await expect(page.getByLabel('한국어 요청 원문',{exact:true})).toBeEditable();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(s.errors).toEqual([]);});
 test('audio over 30 seconds is rejected without silently truncating or uploading it',async({page})=>{const s=await fixture(page);await page.getByRole('checkbox',{name:/이 컴퓨터에서 음성을 처리/}).check();await page.getByLabel('음성 파일 선택').setInputFiles({name:'too-long.wav',mimeType:'audio/wav',buffer:wave(31000)});await expect(page.getByText(/전사를 완료하지 못했습니다/)).toBeVisible();expect(s.writes).toEqual([]);expect(s.errors).toEqual([]);});
+
+test('recovery hold preserves text input and requires explicit current-version confirmation',async({page})=>{
+  const s=await fixture(page),retries:unknown[]=[];let restored=false;
+  await page.route('**/api/v1/voice/status',route=>route.fulfill({json:{data:{ready:true,busy:!restored,usedToday:1,limits:{daily:20},recoveryBlocked:!restored,recoveryCode:restored?null:'VOICE_RECOVERY_RETRY_LIMIT',recoveries:[{id:candidate,status:restored?'CANCELLED':'PROCESSING',version:42,errorCode:restored?'VOICE_RECOVERED_AFTER_CRASH':'VOICE_PROCESS_UNVERIFIABLE'}]}}}));
+  await page.route(`**/api/v1/voice/candidates/${candidate}/recover`,route=>{retries.push(route.request().postDataJSON());expect(route.request().headers()['x-csrf-token']).toBe('controlled-voice-csrf');restored=true;return route.fulfill({status:202,json:{data:{status:'RECOVERY_REQUESTED',automaticReplay:false}}});});
+  await page.getByRole('button',{name:'음성 상태 새로고침'}).click();
+  await expect(page.getByRole('alert').filter({hasText:'음성 복구 확인이 필요'})).toBeVisible();
+  await expect(page.getByLabel('한국어 요청 원문',{exact:true})).toBeEditable();
+  await expect(page.getByRole('button',{name:'마이크로 입력'})).toBeDisabled();
+  await page.getByText('음성 복구 이력·확인',{exact:true}).click();
+  await expect(page.getByRole('button',{name:'잔여 음성 복구 확인'})).toBeDisabled();
+  await page.getByRole('checkbox',{name:/이 후보의 소유권이 확인된/}).check();
+  await page.getByRole('button',{name:'잔여 음성 복구 확인'}).click();
+  await expect(page.getByText(/CANCELLED · VOICE_RECOVERED_AFTER_CRASH/)).toBeVisible();
+  expect(retries).toEqual([{expectedVersion:42,confirmed:true}]);expect(s.writes).toEqual([]);expect(s.errors).toEqual([]);
+});
+
+test('failed recovery keeps the hold and never replays transcription',async({page})=>{
+  const s=await fixture(page);
+  await page.route('**/api/v1/voice/status',route=>route.fulfill({json:{data:{ready:true,busy:true,usedToday:1,limits:{daily:20},recoveryBlocked:true,recoveryCode:'VOICE_PROCESS_UNVERIFIABLE',recoveries:[{id:candidate,status:'PROCESSING',version:4,errorCode:'VOICE_PROCESS_UNVERIFIABLE'}]}}}));
+  await page.route(`**/api/v1/voice/candidates/${candidate}/recover`,route=>route.fulfill({status:409,json:{error:{code:'VERSION_CONFLICT',messageKo:'다른 복구 확인이 진행되었습니다.'}}}));
+  await page.getByRole('button',{name:'음성 상태 새로고침'}).click();await page.getByText('음성 복구 이력·확인',{exact:true}).click();
+  await page.getByRole('checkbox',{name:/이 후보의 소유권이 확인된/}).check();await page.getByRole('button',{name:'잔여 음성 복구 확인'}).click();
+  await expect(page.getByText('다른 복구 확인이 진행되었습니다.')).toBeVisible();await expect(page.getByLabel('음성 파일 선택')).toBeDisabled();
+  expect(s.writes).toEqual([]);expect(s.errors).toEqual([]);
+});
+
+test('hiding the page discards a controlled capture and releases its tracks',async({page})=>{
+  // Synthetic lifecycle fixture only; this does not open or verify physical hardware.
+  await page.addInitScript(()=>{Object.assign(window,{voiceTrackStops:0});Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value:async()=>({getTracks:()=>[{stop:()=>{const w=window as unknown as {voiceTrackStops:number};w.voiceTrackStops++;}}]})});class Capture{state='inactive';mimeType='audio/webm';onstop:(()=>void)|null=null;ondataavailable:unknown=null;onerror:unknown=null;start(){this.state='recording';}stop(){this.state='inactive';this.onstop?.();}}Object.assign(window,{MediaRecorder:Capture});});
+  const s=await fixture(page);await page.getByRole('checkbox',{name:/이 컴퓨터에서 음성을 처리/}).check();await page.getByRole('button',{name:'마이크로 입력'}).click();
+  await expect(page.getByText('녹음 중 · 최대 30초',{exact:true})).toBeVisible();
+  await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+  await expect(page.getByRole('button',{name:'마이크로 입력'})).toBeVisible();expect(await page.evaluate(()=>(window as unknown as {voiceTrackStops:number}).voiceTrackStops)).toBe(1);
+  expect(s.writes).toEqual([]);expect(s.errors).toEqual([]);
+});

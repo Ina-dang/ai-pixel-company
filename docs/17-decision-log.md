@@ -159,6 +159,15 @@
 - 근거: 0010 migration, voice provider/routes/UI, T20 시험과 README의 실제 전사/취소·browser·회귀 근거, 20장 공식 링크. 실행 파일/모델/개인 음성·비밀은 Git에 넣지 않는다.
 - 경계 보완: 취소 요청 중에는 PROCESSING/VOICE_CANCEL_REQUESTED로 native close/파일 정리를 기다리며 슬롯을 유지한다. error 이벤트만으로 종료를 가정하지 않는다. cleanup 불명은 PROCESSING/VOICE_CLEANUP_REQUIRED로 후속 전사와 cancel 초기화를 차단한다. 실제 native spawn 실패/close 정리와 두 경계 회귀를 포함해 최종 자동223·Chromium37을 검증한다.
 
+## ADR-017 — 로컬 음성의 소유권 기반 강제 종료 복구 (2026-10-20, Windows 구현·검증)
+
+- 대체: ADR-016의 강제 종료 뒤 자동 조정 미구현 항목을 이 Windows 로컬 범위에서 대체한다. 운영 C·물리 마이크·Codex worker supervisor 분리의 미검증 범위는 유지한다.
+- 결정: PROCESSING 행과 host UUID/hostname·Owner PID/생성 FILETIME/SID/executable 영수증을 먼저 commit한다. 복구는 Windows process handle을 고정하고 소유자 생존 여부·native executable/SID/Windows 파싱 argv를 대조한 뒤 해당 native 종료/대기를 확인한다. 소유 UUID 폴더의 단일 regular audio.wav만 삭제하고 빈 디렉터리만 제거한다.
+- 경계: PID/프로세스명만 보고 종료하거나 재귀 삭제하지 않는다. host/영수증 불명·junction/hardlink·추가 파일은 차단한다. DB advisory lock·행 잠금, 시작 시/30초 주기, 자동2회 제한·Owner 명시적 version 재확인을 적용한다. 복구는 CANCELLED/VOICE_RECOVERED_AFTER_CRASH로 닫고 전사/업무/run을 replay하지 않는다. maintenance/restore quarantine에서는 native를 건드리지 않는다.
+- 검증: DB 경계11·Windows 실행 경계8·실제 API Owner 강제 종료2를 추가했다. Windows 시험은 살아 있는 소유자 보존·PID 재사용·정확한 native 종료1개·파일 삭제·잘못된 argv/host/link 보존을 확인한다. API 강제 종료 두 건은 종료 전 native 생존, 복구 시 이미 종료됨(stopped=0), WAV1개 삭제·남은 음성0·task/run0이다. 장시간 C# native 대역과 실제 whisper 모델 실행을 구분하며 미확인 고아 생존을 성공했다고 주장하지 않는다.
+- 호환/한계: 기존 null 영수증·host 정체성 파일 유실/다른 host는 보수적으로 차단한다. 같은 소유자가 살아 있는 cleanup 실패는 소유자를 자동 종료하지 않는다. UI 입력 경로 선언/입력 신호는 물리 장치 인증/정확도 증거가 아니다. 실제 마이크 시험은 헴의 준비 통보까지 대기한다. 새 유료 API·다운로드·merge·운영 배포는 없다.
+- 공식 확인: Microsoft [Process Handles and Identifiers](https://learn.microsoft.com/en-us/windows/win32/procthread/process-handles-and-identifiers), [GetProcessTimes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes), [CommandLineToArgvW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-commandlinetoargvw), 열람2026-10-20. API 정체성·생성 시각·인자 파싱의 공식 근거이며 앱의 복구 성공은 별도 실제 시험으로 확인한다.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

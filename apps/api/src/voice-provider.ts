@@ -2,11 +2,15 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile, rm, lstat } from 'node:fs/promises';
 import path from 'node:path';
+import { VoiceRecoveryHost, nativeSpeechArguments, type VoiceOwner, type VoiceRecovery } from './voice-recovery.js';
 
 export const VOICE_LIMITS = { bytes: 960_044, durationMs: 30_000, daily: 20, timeoutMs: 60_000, candidateTtlSeconds: 3600 } as const;
 export interface SpeechProvider {
   readiness(): Promise<{ ready: boolean; code: string | null }>;
   transcribe(wav: Buffer, id: string, signal: AbortSignal): Promise<string>;
+  prepareExecution?(): Promise<VoiceOwner>;
+  recoverExecution?(id: string, receipt: unknown): Promise<VoiceRecovery>;
+  temporaryIds?(): Promise<string[]>;
 }
 export function validateWave(wav: Buffer) {
   if (wav.length < 44 || wav.length > VOICE_LIMITS.bytes || wav.toString('ascii', 0, 4) !== 'RIFF' || wav.toString('ascii', 8, 12) !== 'WAVE'
@@ -22,7 +26,8 @@ export class LocalWhisper implements SpeechProvider {
   private readonly runtime: string;
   private executable: string | null = null;
   private checked = false;
-  constructor(private readonly root: string) { this.runtime = path.join(root, '.local/voice-runtime'); }
+  private recoveryHost: VoiceRecoveryHost | undefined;
+  constructor(private readonly root: string, private readonly onNativeStarted?: (id: string, pid: number) => void) { this.runtime = path.join(root, '.local/voice-runtime'); }
   async readiness() {
     if (this.checked) return { ready: Boolean(this.executable), code: this.executable ? null : 'VOICE_PROVIDER_UNAVAILABLE' };
     this.checked = true;
@@ -52,7 +57,8 @@ export class LocalWhisper implements SpeechProvider {
       await writeFile(file, wav, { flag: 'wx', mode: 0o600 });
       signal.throwIfAborted();
       transcription = await new Promise<string>((resolve, reject) => {
-        const child = spawn(executable, ['-m', path.join(this.runtime, 'ggml-tiny.bin'), '-f', file, '-l', 'ko', '-t', '2', '-ng', '-nt', '-np', '-bs', '1', '-bo', '1'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], cwd: this.runtime });
+        const child = spawn(executable, nativeSpeechArguments(this.root, id), { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], cwd: this.runtime });
+        child.once('spawn', () => { if (child.pid) this.onNativeStarted?.(id, child.pid); });
         let output = '', failed = false, timedOut = false;
         const stop = () => { failed = true; child.kill(); };
         const timer = setTimeout(() => { timedOut = true; stop(); }, VOICE_LIMITS.timeoutMs);
@@ -83,4 +89,12 @@ export class LocalWhisper implements SpeechProvider {
     if (failed) throw originalError;
     return transcription;
   }
+  private async host() {
+    if (!(await this.readiness()).ready || !this.executable) throw new Error('VOICE_PROVIDER_UNAVAILABLE');
+    if (!this.recoveryHost) this.recoveryHost = new VoiceRecoveryHost(this.root, this.executable);
+    return this.recoveryHost;
+  }
+  async prepareExecution() { return (await this.host()).identity(); }
+  async recoverExecution(id: string, receipt: unknown) { return (await this.host()).recover(id, receipt); }
+  async temporaryIds() { return (await this.host()).temporaryIds(); }
 }

@@ -4,11 +4,14 @@
 
 | 경로 | 동작/검사 |
 |---|---|
-| GET `/api/v1/voice/status` | 로그인된 Owner용 준비/로컬 공급자·보관/고정 상한·UTC 사용량·busy·paidApiFallback=false |
+| GET `/api/v1/voice/status` | 로그인된 Owner용 준비/로컬 공급자·보관/고정 상한·UTC 사용량·busy·paidApiFallback=false·recoveryBlocked/code·본인 복구 후보 이력. 소유권 영수증은 비공개 |
 | POST `/api/v1/projects/:id/voice/candidates` | audio/wav, 최대960044byte; Origin/CSRF/Owner/동의 헤더/중복 키·project/maintenance·WAV/한도 검사 후202 후보 ID. 같은 key replay는 native 재실행 없음 |
 | GET `/api/v1/voice/candidates/:id` | 같은 organization/actor의 후보 조회; 만료 text 정리. READY만 text 반환 |
 | DELETE `/api/v1/voice/candidates/:id` | CSRF/중복 키·scope 검사, 미확인 후보 폐기·소유 native 취소/close·임시 WAV 삭제. 확정된 task 삭제/취소 API가 아님 |
 | POST `/api/v1/voice/candidates/:id/confirm` | JSON confirmed=true/expectedVersion/task(source=VOICE). 현재 후보·Owner/project·만료/점검을 검사하고 공통 task command로 TODO 생성; replay 같은 task 반환 |
+| POST `/api/v1/voice/candidates/:id/recover` | JSON confirmed=true/expectedVersion, Origin/CSRF/Owner/actor·현재 PROCESSING·로컬 활성 실행 없음 검사. 제한된 복구 재확인만 요청하며 전사/task/run을 재실행하지 않음 |
+
+업로드의 선택적 `X-Voice-Input: UNKNOWN/FILE/MICROPHONE`은 idempotency hash에 포함한다. 선언값은 하드웨어 검증 근거가 아니다. 새 업로드는 복구 조정을 먼저 수행하고 소유권/파일 정리가 확인되지 않으면409 VOICE_RECOVERY_REQUIRED로 막는다. 기존 텍스트 등록은 사용할 수 있다.
 
 VOICE는 일반 task POST에서 거부한다. 음성만으로 run/merge/배포·결제·권한 승인하지 않으며 자연어 intent 실행 API는 없다. provider 미준비/한도/처리 불명은 유료 모델이나 자동 retry로 대체하지 않는다. 강제 종료 뒤 소유 native 종료가 불명인 PROCESSING은 자동 초기화하지 않는다. 오류/보관/OS 범위는20장과README를 따른다.
 

@@ -4,7 +4,9 @@
 
 `pnpm setup:voice`는 Windows x64에만 설치하며 공식 archive/model hash를 검증한다. `.local/voice-runtime`의 기존 manifest가 정상이라면 재다운로드 없이 재검증한다. 불완전/변조된 설치는 자동 복구/덮어쓰기하지 않는다. manifest/executable/DLL/model·라이선스는 Git 제외 로컬 파일이다. provider 미준비 상태에서도 텍스트 업무 등록이 가능하다.
 
-일반 처리/취소/정상 서버 종료는 native close 뒤 `.local/voice-temp/<candidate UUID>/audio.wav`를 지운다. 강제 서버 종료의 native 종료 불명과 잔여 WAV는 자동 정리로 성공 처리하지 않는다. 같은 executable·UUID input path·PID/실행 시각을 운영자가 확인하고 종료/파일 삭제를 별도 조정하기 전 PROCESSING을 임의 READY/FAILED로 초기화하거나 새 STT를 시작하지 않는다. 현재 단일 처리 DB 제약이 후속 전사를 차단한다. host supervisor 자동 조정과 crash 이후 원시 음성 정리는 미검증이며 운영 C 제한에 포함한다.
+일반 처리/취소/정상 서버 종료는 native close 뒤 `.local/voice-temp/<candidate UUID>/audio.wav`를 지운다. 강제 종료 후에는 시작 시/30초 주기로 영속 영수증과 같은 로컬 host를 대조한다. 살아 있는 소유자는 보존하고, PID가 재사용됐으면 생성 FILETIME으로 구분한다. native의 Windows handle을 고정한 채 executable/SID/정확한 argv를 재검사하고 해당 프로세스만 종료·대기한다. UUID 폴더의 단일 regular audio.wav(최대960044byte)를 unlink하고 빈 폴더만 rmdir한다. junction·symlink·hardlink·추가 파일·외부 host·영수증 불명은 자동 삭제하지 않는다. 종료/삭제 확인 전에는 PROCESSING과 단일 슬롯을 유지하며 자동2회 뒤 중단한다. Owner는 화면의 동의와 현재 version으로 복구 확인만 다시 요청할 수 있다. 재전사/업무 replay는 없다.
+
+`.local/voice-host.json`은 이 PC의 복구 정체성이다. 다른 host에 복사해 신뢰하거나 수동 재발급해 이전 영수증을 소유한 것으로 간주하지 않는다. migration 이전 PROCESSING의 영수증이 없거나 host 파일이 유실되면 보수적으로 차단하고 수동 운영 확인이 필요하다. 같은 Owner 프로세스가 살아 있는 파일 정리 실패도 자동으로 소유자를 종료하지 않으며, 정상 중단/재시작 후 다시 확인한다. maintenance/RESTORE_QUARANTINE에서는 프로세스 종료를 시도하지 않는다. 이 Windows 로컬 복구는 기존 Codex worker supervisor의 운영 권한 분리를 대체하지 않는다.
 
 백업은 voice 후보 metadata/text가 포함된 DB를 기존 방식으로 암호화하지만 원시 음성 임시 폴더와 모델 파일은 workspace backup 대상이 아니다. restore quarantine는 READY/PROCESSING 후보 text를 지우고 CANCELLED/RESTORE_QUARANTINE으로 바꾼다. off-host 복구 때 모델은 공식 pinned setup으로 다시 설치/대조해야 한다. 개인정보 보관 정책/OS 권한 분리·다른 OS/물리 microphone 시험을 로컬 시험으로 대체하지 않는다.20장·ADR-016·README의 실제 근거를 따른다.
 

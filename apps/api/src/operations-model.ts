@@ -31,7 +31,7 @@ export class RequestMetrics{
 }
 export async function sourceDigest(root:string){
   const files:string[]=[];
-  async function walk(path:string){for(const e of await readdir(path,{withFileTypes:true})){if(e.isSymbolicLink())throw new Error('SOURCE_LINK_DENIED');if(['node_modules','dist','.next','.turbo','__pycache__'].includes(e.name))continue;const p=join(path,e.name);if(e.isDirectory())await walk(p);else if(/\.(?:ts|tsx|sql|json|mjs|css|py)$/.test(e.name))files.push(p);}}
+  async function walk(path:string){for(const e of await readdir(path,{withFileTypes:true})){if(e.isSymbolicLink())throw new Error('SOURCE_LINK_DENIED');if(['node_modules','dist','.next','.turbo','__pycache__'].includes(e.name))continue;const p=join(path,e.name);if(e.isDirectory())await walk(p);else if(/\.(?:ts|tsx|sql|json|mjs|css|py|ps1)$/.test(e.name))files.push(p);}}
   for(const name of ['apps','packages','scripts','tests'])await walk(join(root,name));
   const rows=[];for(const file of files.sort())rows.push([relative(root,file).replaceAll('\\','/'),sha256((await readFile(file,'utf8')).replaceAll('\r\n','\n'))]);
   return sha256(JSON.stringify(rows));

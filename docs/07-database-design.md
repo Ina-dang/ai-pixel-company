@@ -4,6 +4,8 @@
 
 `0010_voice_commands.sql`의 `voice_candidates`는 organization/project/actor/session·동의 버전·audio hash/길이·provider·상태/version·후보 text/hash·task/수정 여부/confirmedAt을 연결한다. raw audio column은 없다. PROCESSING 전역 unique index로 로컬 native 전사를1개로 제한하고 조직/UTC일 count로20회 한도를 집행한다. READY text만 후보에 보관하며 확인/취소/만료/복원 격리 때 null로 바꾼다. 확인된 원문은 기존 tasks에 source=VOICE로 보존한다. task/run/승인 상태를 후보와 혼용하지 않는다. `idempotency_keys`의 업로드 응답에는 ID/PROCESSING만 저장해 원시 전사를 복제하지 않는다. 감사 metadata의 운영 보관 기간은 미확정이며 해시를 익명화로 간주하지 않는다. 상세는20장·ADR-016.
 
+`0011_voice_recovery.sql`은 owner_receipt·recovery_details·recovery_attempts(자동 최대2회)·capture_source를 추가한다. PROCESSING 행과 소유권 영수증을 같은 transaction에서 저장한 뒤 파일을 쓰고 native를 실행한다. 영수증은 로컬 host UUID/hostname·Owner PID/생성 FILETIME/SID/executable을 묶고 API에 반환하지 않는다. 복구 결과에는 종료/삭제 개수·고정 코드·시각·automaticReplay=false만 노출한다. capture_source=UNKNOWN/FILE/MICROPHONE은 클라이언트의 입력 경로 선언이며 물리 장치 인증이 아니다. DB advisory lock·행 잠금으로 복구를 직렬화하며 종료·삭제가 확인돼야 CANCELLED/VOICE_RECOVERED_AFTER_CRASH로 바꾼다. 이전 행의 null 영수증은 추측해 보완하지 않는다.
+
 ## P4-05/06 운영 저장 계약 — 2026-10-20
 
 Migration0009는 `operations_controls`, `operations_snapshots`, `operations_alerts/events`, `operations_notification_policies/outbox`, `operations_jobs`, `operations_backups`, `operations_release_checks`를 추가한다. 기존 domain 행/이력을 삭제하지 않는다. controls는 단조 version·LIVE/RESTORE_QUARANTINE·점검 token, alerts는 원인별 활성 episode 유일성, outbox는 event 유일성과 최대3회/UNKNOWN, jobs는 단일 active/UNKNOWN gate를 사용한다. 경보/출시 검증 이력은 update/delete를 금지한다.

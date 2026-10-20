@@ -10,13 +10,15 @@ P5-01과 P5-02의 정상 처리/취소 경로를 구현했다. 아래 초기 설
 - 후보: Owner+Origin+CSRF+Idempotency-Key+`local-transcription-v1` 동의를 실제 API 경계에서 검사한다. `PROCESSING→READY→CONFIRMED`와 `CANCELLED/FAILED/EXPIRED`를 task/run과 분리한다. 원시 WAV는 비공개 UUID 임시 폴더에만 쓰고 native close 이후 finally에서 삭제한다. 브라우저 녹음은 stop/cancel/unmount에 모든 track을 중지한다. 사용자가 선택한 원본 파일은 앱 임시 파일과 별개다.
 - 텍스트: 후보는 생성1시간 뒤 만료하며, 서버의30초 주기 및 조회 때 정리한다(DB 장애 때 정리 지연 가능). 확인/취소 때 후보 plaintext를 없앤다. 확인한 한국어 문장은 task 원문으로 보존하고 candidate ID·해시·수정 여부·actor·동의·confirmedAt을 연결한다. 해시는 익명화 보장이 아니다. 감사 metadata의 장기 보관/삭제 정책은 운영 개인정보 검토에 남긴다.
 - 확인: 프로젝트·직원 이름/숫자/경로/수용 기준을 Owner가 확인한다. 문장 수정은 확인란을 해제한다. 확인 endpoint는 서버 candidate 상태/version/만료와 현재 Owner·project·maintenance를 재검사한 뒤 TEXT/SLACK과 같은 `createTaskCommand`를 호출한다. 일반 tasks endpoint로 VOICE source를 위조할 수 없다. 생성 상태는 TODO이며 run/merge/배포 승인 생성은 없다. 자연어 조회·중단 intent parser와 TTS·상시 청취/회의는 구현하지 않았다. 기존 UI 제어를 사용한다.
-- 복구: 격리 restore는 READY/PROCESSING 후보 plaintext를 폐기하고 CANCELLED/RESTORE_QUARANTINE으로 처리한다. 이전 schema의 backup도 table 존재 검사로 호환한다. 서버 강제 종료로 native 종료를 확인할 수 없는 PROCESSING은 자동 replay/초기화하지 않으며 단일 처리 제약으로 후속 STT를 막는다. 해당 UUID 임시 WAV와 process identity는 운영자가 확인해야 한다. 이 강제 종료 경로의 자동 조정/삭제는 미구현·미검증이다.
+- 복구: 격리 restore는 READY/PROCESSING 후보 plaintext를 폐기하고 CANCELLED/RESTORE_QUARANTINE으로 처리한다. 이전 schema의 backup도 table 존재 검사로 호환한다. 강제 종료 후에는 durable owner receipt의 host/PID/생성 FILETIME/SID/executable과 Windows handle·정확한 argv를 확인해 해당 native 종료 후 UUID audio.wav만 삭제한다. 시작 시/30초 조정, DB 잠금, 최대 자동2회, 확인 불가 차단·Owner version 재확인을 적용한다. 영수증은 PROCESSING 저장 시점에 함께 commit하므로 native 실행 전의 crash도 추적한다. 구형 null 영수증·외부 host·junction/hardlink·알 수 없는 파일은 자동 삭제하지 않는다. 복구 뒤 CANCELLED로 닫으며 자동 전사/task/run replay는 없다.15장·ADR-017을 따른다.
 
 API: `GET /api/v1/voice/status`, `POST /api/v1/projects/:id/voice/candidates`(audio/wav), `GET/DELETE /api/v1/voice/candidates/:id`, `POST /api/v1/voice/candidates/:id/confirm`(확인문·expectedVersion·task). raw audio나 transcript는 구조화 request 로그에 넣지 않는다.
 
 취소 요청은 `PROCESSING/VOICE_CANCEL_REQUESTED`로 전역 슬롯을 유지한다. native `close`와 임시 파일 정리가 끝나야 CANCELLED로 바꾸며, 파일 정리 실패는 `PROCESSING/VOICE_CLEANUP_REQUIRED`로 남겨 cancel replay로도 슬롯을 열지 않는다. native error 이벤트를 종료 근거로 쓰지 않는다. [Node child_process close 계약](https://nodejs.org/docs/latest-v22.x/api/child_process.html#event-close)(2026-10-20 열람, 공개 v22.23.3 문서/실행22.20.0)을 대조했고 실제 spawn 실패→close→파일 정리와 취소 중 차단을 시험했다.
 
 실행: `pnpm setup:voice`(이미 설치됐다면 hash 대조 후 재사용), `pnpm verify:voice-live`, `pnpm verify:voice-browser`. 실제 전사 시험은 Windows의 설치된 Microsoft Heami Desktop으로 만든 공개 시험 문장이다. 실제 마이크가 아니다. 브라우저 대역 시험의 마이크 거부/track 해제와 실제 STT 호출을 구분한다. 정확도/품질 일반화 근거가 부족해 P5-04 자동 모델 최적화는 도입하지 않는다. TTS·회의/추가 연동(P5-03)은 별도 요구가 없어 평가 후 보류한다.
+
+마이크 UI는 경과 초·입력 신호 유무를 표시하며 신호 감지는 정확도/문장 인식의 증거가 아니다. 탭 숨김/취소/이탈 때 녹음·meter·track을 해제하고 그 녹음을 업로드하지 않는다. FILE/MICROPHONE 표시는 클라이언트의 경로 선언이다. 물리 마이크 시험은 헴이 준비됐다고 알린 뒤 직접 동의·녹음하며, 현재 요청에 따라 대기한다.
 
 공식 확인 경로(2026-10-20 열람): [whisper.cpp README](https://github.com/ggml-org/whisper.cpp), [b5454 배포/해시](https://github.com/ggml-org/whisper.cpp/releases/tag/b5454), [모델 파일·SHA](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md), [Whisper MIT License](https://github.com/openai/whisper/blob/main/LICENSE). 최신 release tag는 v1.9.5였지만 설치는 Windows CPU asset이 공개된 b5454에 고정했다. 원격 문서별 최종 수정일은 별도 확정하지 않았다.
 

@@ -8,16 +8,53 @@ import { createTaskCommand } from './task-commands.js';
 import { maintenanceReason } from './maintenance.js';
 import { LocalWhisper, type SpeechProvider, validateWave, VOICE_LIMITS } from './voice-provider.js';
 
-type Candidate = { id: string; organization_id: string; project_id: string; actor_id: string; session_id: string; status: string; transcript: string | null; transcript_hash: string | null; duration_ms: number; version: number; error_code: string | null; task_id: string | null; expires_at: Date };
-const view = (row: Candidate) => ({ id: row.id, projectId: row.project_id, status: row.status, transcript: row.status === 'READY' ? row.transcript : null, durationMs: row.duration_ms, version: row.version, errorCode: row.error_code, taskId: row.task_id, expiresAt: row.expires_at });
+type Candidate = { id: string; organization_id: string; project_id: string; actor_id: string; session_id: string; status: string; transcript: string | null; transcript_hash: string | null; duration_ms: number; version: number; error_code: string | null; task_id: string | null; expires_at: Date; owner_receipt: unknown; recovery_attempts: number; recovery_details: unknown; capture_source: string };
+const view = (row: Candidate) => ({ id: row.id, projectId: row.project_id, status: row.status, transcript: row.status === 'READY' ? row.transcript : null, durationMs: row.duration_ms, version: row.version, errorCode: row.error_code, taskId: row.task_id, expiresAt: row.expires_at, captureSource: row.capture_source, recoveryAttempts: row.recovery_attempts, recoveryDetails: row.recovery_details });
 const hash = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
 function uuid(value: string) { const id = idSchema.safeParse(value); if (!id.success) throw new ApiError(404, 'NOT_FOUND', '음성 후보를 찾을 수 없습니다.'); return id.data; }
 export class VoiceService {
   private timer: ReturnType<typeof setInterval> | undefined;
   private active = new Map<string, { controller: AbortController; finished: Promise<void> }>();
+  private recovery: Promise<void> | undefined;
+  private recoveryBlocked = false;
+  private recoveryCode: string | null = null;
   readonly provider: SpeechProvider;
   constructor(private readonly db: Database, root: string, provider?: SpeechProvider) { this.provider = provider ?? new LocalWhisper(root); }
-  async start() { await this.expire(); this.timer = setInterval(() => { void this.expire().catch(() => undefined); }, 30_000); this.timer.unref(); }
+  async start() { await this.recoverPending(); await this.expire(); this.timer = setInterval(() => { void this.recoverPending().then(() => this.expire()).catch(() => { this.recoveryBlocked = true; this.recoveryCode = 'VOICE_RECOVERY_UNVERIFIABLE'; }); }, 30_000); this.timer.unref(); }
+  async recoverPending() {
+    if (this.recovery) return this.recovery;
+    this.recovery = this.reconcile().finally(() => { this.recovery = undefined; });
+    return this.recovery;
+  }
+  private async reconcile() {
+    this.recoveryBlocked = false; this.recoveryCode = null;
+    if (!this.provider.recoverExecution || !this.provider.temporaryIds) return;
+    if (await maintenanceReason(this.db.sql)) { this.recoveryBlocked = true; this.recoveryCode = 'MAINTENANCE_MODE'; return; }
+    const recover = this.provider.recoverExecution.bind(this.provider);
+    try {
+      const directories = await this.provider.temporaryIds();
+      const rows = await this.db.sql<Candidate[]>`select * from voice_candidates where status='PROCESSING' or id::text=any(${directories}) order by created_at limit 20`;
+      if (directories.some(id => !rows.some(row => row.id === id))) { this.recoveryBlocked = true; this.recoveryCode = 'VOICE_UNOWNED_TEMPORARY_FILES'; }
+      for (const row of rows) {
+        if (this.active.has(row.id)) continue;
+        await this.db.sql.begin(async tx => {
+          await tx`select pg_advisory_xact_lock(hashtextextended(${`voice-recovery:${row.id}`},0))`;
+          const current = (await tx<Candidate[]>`select * from voice_candidates where id=${row.id} for update`)[0];
+          if (!current || this.active.has(row.id)) return;
+          if (current.status !== 'PROCESSING' && !(await this.provider.temporaryIds?.())?.includes(row.id)) return;
+          if (current.recovery_attempts >= 2) { this.recoveryBlocked = true; this.recoveryCode = 'VOICE_RECOVERY_RETRY_LIMIT'; return; }
+          const result = await recover(current.id, current.owner_receipt).catch(() => ({ state: 'BLOCKED' as const, code: 'VOICE_RECOVERY_UNVERIFIABLE', stopped: 0, filesDeleted: 0, automaticReplay: false as const }));
+          if (result.state === 'OWNER_ALIVE') return;
+          const safeResult = { state: result.state, code: result.code, stopped: result.stopped, filesDeleted: result.filesDeleted, automaticReplay: false, checkedAt: new Date().toISOString() };
+          await tx`update voice_candidates set status=${result.state === 'RECOVERED' ? 'CANCELLED' : 'PROCESSING'},transcript=null,error_code=${result.code},
+            recovery_attempts=recovery_attempts+1,recovery_details=${tx.json(safeResult)},version=version+1 where id=${current.id}`;
+          await tx`insert into audit_logs(id,organization_id,project_id,actor_type,actor_id,action,target_type,target_id,request_id,outcome)
+            values(${randomUUID()},${current.organization_id},${current.project_id},'SYSTEM','voice-recovery','voice.recovery','voice_candidate',${current.id},${randomUUID()},${result.state === 'RECOVERED' ? 'SUCCESS' : 'DENIED'})`;
+          if (result.state !== 'RECOVERED') { this.recoveryBlocked = true; this.recoveryCode = result.code; }
+        });
+      }
+    } catch { this.recoveryBlocked = true; this.recoveryCode = 'VOICE_RECOVERY_UNVERIFIABLE'; }
+  }
   async expire() {
     await this.db.sql`update voice_candidates set status='EXPIRED',transcript=null,version=version+1 where status='READY' and expires_at<=now()`;
   }
@@ -47,7 +84,7 @@ export class VoiceService {
     this.active.set(row.id, { controller, finished });
     void finished.catch(() => undefined);
   }
-  async stop() { if (this.timer) clearInterval(this.timer); for (const entry of this.active.values()) entry.controller.abort(); await Promise.allSettled([...this.active.values()].map(entry => entry.finished)); }
+  async stop() { if (this.timer) clearInterval(this.timer); for (const entry of this.active.values()) entry.controller.abort(); await Promise.allSettled([...this.active.values()].map(entry => entry.finished)); await this.recovery; }
   routes() {
     const app = new Hono<ApiEnv>();
     app.get('/voice/status', async c => {
@@ -55,10 +92,13 @@ export class VoiceService {
       const ready = await this.provider.readiness();
       const usage = await this.db.sql`select count(*)::int as used from voice_candidates where organization_id=${c.get('auth').organizationId} and created_at>=date_trunc('day',now() at time zone 'UTC') at time zone 'UTC'`;
       const busy = await this.db.sql`select 1 from voice_candidates where status='PROCESSING' limit 1`;
-      return c.json({ data: { ...ready, provider: 'whisper.cpp b5454 / tiny 다국어 / 로컬 CPU', language: 'ko', audioDestination: '이 컴퓨터', rawAudioRetention: '처리·취소 후 임시 WAV 삭제', transcriptRetentionSeconds: VOICE_LIMITS.candidateTtlSeconds, limits: VOICE_LIMITS, usedToday: usage[0].used, busy: busy.length > 0, paidApiFallback: false, consentVersion: 'local-transcription-v1' }, requestId: c.get('requestId') });
+      const recoveries = await this.db.sql<Candidate[]>`select * from voice_candidates where organization_id=${c.get('auth').organizationId} and actor_id=${c.get('auth').userId} and (status='PROCESSING' or recovery_details is not null) order by created_at desc limit 10`;
+      return c.json({ data: { ...ready, provider: 'whisper.cpp b5454 / tiny 다국어 / 로컬 CPU', language: 'ko', audioDestination: '이 컴퓨터', rawAudioRetention: '처리·취소 후 임시 WAV 삭제', transcriptRetentionSeconds: VOICE_LIMITS.candidateTtlSeconds, limits: VOICE_LIMITS, usedToday: usage[0].used, busy: busy.length > 0, paidApiFallback: false, consentVersion: 'local-transcription-v1', recoveryBlocked: this.recoveryBlocked, recoveryCode: this.recoveryCode, recoveries: recoveries.map(view) }, requestId: c.get('requestId') });
     });
     app.post('/projects/:id/voice/candidates', async c => {
       const projectId = uuid(c.req.param('id'));
+      await this.recoverPending();
+      if (this.recoveryBlocked) throw new ApiError(409, 'VOICE_RECOVERY_REQUIRED', '잔여 음성 복구 확인이 필요합니다.');
       if (c.req.header('X-Voice-Consent') !== 'local-transcription-v1') throw new ApiError(400, 'VOICE_CONSENT_REQUIRED', '로컬 음성 처리와 보관 안내에 동의해 주세요.');
       if (c.req.header('Content-Type')?.split(';')[0] !== 'audio/wav') throw new ApiError(415, 'VOICE_INVALID_WAVE', '16kHz 모노 PCM WAV만 지원합니다.');
       if (!(await this.provider.readiness()).ready) throw new ApiError(503, 'VOICE_PROVIDER_UNAVAILABLE', '로컬 음성 모델이 준비되지 않았습니다. 텍스트로 입력해 주세요.');
@@ -67,7 +107,11 @@ export class VoiceService {
       try { duration = validateWave(wav); } catch { wav.fill(0); throw new ApiError(400, 'VOICE_INVALID_WAVE', '0.25~30초, 16kHz 모노 16bit PCM WAV를 사용하세요.'); }
       let candidateId: string | undefined;
       try {
-        const response = await mutate(this.db, c, { projectId, audioHash: hash(wav), consent: 'local-transcription-v1' }, async tx => {
+        const source = c.req.header('X-Voice-Input') ?? 'UNKNOWN';
+        if (!['UNKNOWN','FILE','MICROPHONE'].includes(source)) throw new ApiError(400, 'VOICE_CAPTURE_SOURCE_INVALID', '음성 입력 경로를 확인하세요.');
+        // Durable ownership is committed before any WAV write or native spawn, including the pre-spawn crash gap.
+        const owner = await this.provider.prepareExecution?.();
+        const response = await mutate(this.db, c, { projectId, audioHash: hash(wav), consent: 'local-transcription-v1', captureSource: source }, async tx => {
           if (await maintenanceReason(tx)) throw new ApiError(409, 'MAINTENANCE_MODE', '점검 중에는 새 음성 처리를 시작할 수 없습니다.');
           const project = await tx`select 1 from projects where id=${projectId} and organization_id=${c.get('auth').organizationId} and status='ACTIVE'`;
           if (!project.length) throw new ApiError(404, 'NOT_FOUND', '프로젝트를 찾을 수 없습니다.');
@@ -75,8 +119,8 @@ export class VoiceService {
           const used = await tx`select count(*)::int as count from voice_candidates where organization_id=${c.get('auth').organizationId} and created_at>=date_trunc('day',now() at time zone 'UTC') at time zone 'UTC'`;
           if (used[0].count >= VOICE_LIMITS.daily) throw new ApiError(429, 'VOICE_DAILY_LIMIT', '오늘의 로컬 전사 20회 한도에 도달했습니다. 텍스트 입력을 사용하세요.');
           const id = randomUUID(), actor = c.get('auth');
-          await tx`insert into voice_candidates(id,organization_id,project_id,actor_id,session_id,status,audio_hash,duration_ms,consent_version)
-            values(${id},${actor.organizationId},${projectId},${actor.userId},${actor.sessionId},'PROCESSING',${hash(wav)},${duration},'local-transcription-v1')`;
+          await tx`insert into voice_candidates(id,organization_id,project_id,actor_id,session_id,status,audio_hash,duration_ms,consent_version,capture_source,owner_receipt)
+            values(${id},${actor.organizationId},${projectId},${actor.userId},${actor.sessionId},'PROCESSING',${hash(wav)},${duration},'local-transcription-v1',${source},${tx.json(owner ?? null)})`;
           candidateId = id;
           await audit(tx, c, 'voice.requested', 'voice_candidate', id, projectId);
           return { status: 202, data: { id, status: 'PROCESSING' } };
@@ -132,6 +176,21 @@ export class VoiceService {
         await audit(tx, c, 'voice.confirmed', 'task', created.id, row.project_id);
         return { status: 201, data: taskView(created) };
       });
+    });
+    app.post('/voice/candidates/:id/recover', async c => {
+      const id = uuid(c.req.param('id'));
+      const input = await c.req.json().catch(() => null) as { expectedVersion?: unknown; confirmed?: unknown } | null;
+      if (input?.confirmed !== true || !Number.isInteger(input.expectedVersion)) throw new ApiError(400, 'VOICE_RECOVERY_CONFIRM_REQUIRED', '음성 잔여 파일 삭제·복구 범위를 확인하세요.');
+      const response = await mutate(this.db, c, input, async tx => {
+        const row = (await tx<Candidate[]>`select * from voice_candidates where id=${id} and organization_id=${c.get('auth').organizationId} and actor_id=${c.get('auth').userId} for update`)[0];
+        if (!row) throw new ApiError(404, 'NOT_FOUND', '음성 후보를 찾을 수 없습니다.');
+        if (row.version !== input.expectedVersion || row.status !== 'PROCESSING' || this.active.has(id)) throw new ApiError(409, 'VOICE_RECOVERY_STATE_CHANGED', '현재 실행 중인 후보는 취소를 사용하고 복구 상태를 다시 확인하세요.');
+        await tx`update voice_candidates set recovery_attempts=0,version=version+1 where id=${id}`;
+        await audit(tx, c, 'voice.recovery.requested', 'voice_candidate', id, row.project_id);
+        return { status: 202, data: { id, status: 'RECOVERY_REQUESTED', automaticReplay: false } };
+      });
+      await this.recoverPending();
+      return response;
     });
     return app;
   }

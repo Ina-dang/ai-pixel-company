@@ -1,5 +1,13 @@
 # 테스트·품질·에이전트 평가
 
+## Phase 5 강제 종료 후속 검증 — 2026-10-20
+
+최종 자동244=기존223+복구21, Chromium40=기존37+복구3, lint/typecheck·TS16/Python26 계약·build PASS다. source digest `74b9f1e099da86d833193f70f14f010221cfe017e25239d61ebf785dc992fecb`의 자동/브라우저 증거는 각각 `ece853e4-9719-460c-a432-025b35799aec` / `a1a032a1-0002-4bac-9787-7f0ab4235b5e`다. 아래223/37은 앞서 수락한1차 이력이다.
+
+복구21개는 DB 조정/두 인스턴스 잠금/상한/Owner 확인/유지보수11개, 실제 Windows PID/생성 시각/argv/host/link·파일 경계8개, 실제 API parent 강제 종료2개다. API 시험은 별도 소유 marker가 있는 DB/폴더와 공개 합성 silence를 사용하고 실제 whisper 모델과 장시간 C# native 대역을 구분한다. 두 API 시험에서 native는 종료 전 살아 있었으나 복구 시 이미 종료되어 stopped=0이었다. 이후 WAV1개 삭제·잔여0·자동 task/run0을 확인했다. 별도 실행 경계 시험에서 살아 있는 정확한 native1개 종료를 검증하므로 두 관측을 혼동하지 않는다. 시험 DB/폴더는 소유 marker·실제 경로 확인 후 정리한다.
+
+브라우저 추가3개는 복구 명시적 동의/current version·오류 시 차단 유지·탭 숨김 때 제어된 track 해제/무업로드다. 첫 숨김 대역 시험은 visibilityState만 변경해 실제 document.hidden 경로에 도달하지 못해 실패했고 올바른 속성 대역으로 수정 후 전체 통과했다. 실제 물리 마이크는 헴의 준비 통보까지 미실행이며 FILE/MICROPHONE 선언·신호 meter를 그 증거로 취급하지 않는다. 원래 구형 영수증/다른 host의 수동 확인·운영 개인정보/범용 환경 한계는 남는다.
+
 ## Phase 5 실제 검증 범위 — 2026-10-20
 
 최종 자동223=기존206+T20 음성17, Chromium37=기존30+음성7, lint/typecheck·TS16/Python26 계약·build를 통과했다. 음성 동의/권한/CSRF·미준비/형식/한도·미확정 task0·수정/확인·source 위조/중복 거부·한도/점검·취소/만료/권한 철회·restore 격리·위험 승인/run0을 검사한다. 추가 경계 검증은 취소 중 전역 슬롯 유지, 파일 정리 불명 시 PROCESSING/차단, 실제 잘못된 native executable의 spawn 실패→close→임시 파일 삭제다. 브라우저는 명시적 동의·escaped 후보·수정 뒤 재확인·취소·거부된 마이크·mock track 해제·390px overflow0·30초 초과 무업로드를 검사한다. UI 대역은 실제 로그인 한도를 소비하지 않으며 실제 인증/STT/browser는 별도 opt-in live verifier에서 검사한다.

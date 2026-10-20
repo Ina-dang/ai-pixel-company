@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-P4 로컬 검증 수락 뒤 P5-01/02-L의 로컬 한국어 STT 후보·수정/확인·공통 task 등록을 구현했다. 자동223개·Chromium37개·TS16/Python26 계약·lint/typecheck/build, 실제 native STT·취소/임시 WAV 삭제·브라우저·table45/workspace14 복원과 취소/정리 실패·native close 경계를 검증했다. LOCAL_FIXTURE는 READY_FOR_OWNER_REVIEW, 운영 C는 NO_GO다. 물리 마이크·강제 종료 뒤 음성 자동 정리/운영 개인정보 정책·TTS/회의·자동 모델 최적화와 기존 off-host/운영 환경·host supervisor 분리·상시 ingress·일반 CI/범용 실행은 남았다. 실제 merge·운영 배포·새 유료 자원 생성은 수행하지 않았다.
+P5-01/02-L 수락 뒤 Windows 강제 종료 후 native/WAV 복구·화면 재확인을 추가했다. 최종 자동244=기존223+복구21, Chromium40=기존37+복구3과 TS16/Python26 계약·lint/typecheck/build PASS다. 실제 API 강제 종료2건과 Windows 소유권/종료·파일 경계를 구분해 검증했다. 물리 마이크는 헴의 준비 통보까지 대기한다. 다른 OS/noise/장문·운영 개인정보 정책·TTS/모델 최적화·기존 off-host/운영 환경·host supervisor 분리·상시 ingress·범용 실행은 남았다. 실제 merge·운영 배포·새 유료 자원 생성은 수행하지 않았다. 최신 실제 연동/복원·근거는 README·ADR-017을 따른다.
 
 ## Phase 0 — Foundation
 
@@ -73,11 +73,13 @@ P4 로컬 검증 수락 뒤 P5-01/02-L의 로컬 한국어 STT 후보·수정/�
 
 - [x] P5-01 공식 배포/모델 hash·MIT 확인 후 로컬 whisper.cpp/tiny STT 후보→수정/확인→기존 공통 task command(T20). 일반 task POST의 VOICE 위조 거부·source/version/원문·수정 감사 연결.
 - [x] P5-02-L 정상 처리/취소의 임시 WAV 삭제·동의·만료·30초/동시1/UTC일20회/60초 timeout·권한 재검사·위험 별도 승인(T20). 실제 native 취소/close, 원시 파일0, 수정 확인 뒤 TODO/자동 run0 확인. 유료 fallback/자동 retry 없음.
-- [ ] P5-02-H 서버 강제 종료 뒤 native identity·잔여 WAV 자동 조정/삭제, 물리 microphone/다른 OS·브라우저·noise/장문과 운영 metadata 보관 정책. PROCESSING 종료 불명은 후속 STT 차단/운영자 확인으로 남김.
+- [ ] P5-02-H 전체 host 검증: Windows 강제 종료 뒤 소유권 기반 native/WAV 복구는 구현·시험 완료(ADR-017). 물리 microphone은 헴의 준비 통보까지 대기. 다른 OS·브라우저/noise/장문·운영 metadata 보관 정책은 남음. 불명 소유권/구형 영수증은 후속 STT 차단/수동 확인 유지.
 - [x] P5-03 범위 평가: TTS·고급 조직/회의/추가 연동은 별도 요구가 없어 보류. 실제 구현/출시 완료 표시는 하지 않음.
 - [ ] P5-04 자동 모델/비용 최적화는 품질/성공률·rollback 근거 후 도입.
 
 2026-10-20: P5-01/02-L 로컬 구현. 최종 자동223=기존206+음성17, Chromium37=기존30+음성7과 lint/typecheck·TS16/Python26 계약·build PASS. 승인 체크박스 선택자와 UI 시험의 실제 로그인 의존성을 수정했고 첫 전체 browser FAIL 이력은 release_checks에 보존했다. 최종 경계 리뷰에서 취소 중 슬롯/cleanup 불명 차단·native error/close 구분도 보완·시험했다. 실제 물리 마이크가 아닌 로컬 한국어 합성 시험 문장을 사용한다. 최종 실제 source digest/후보·task/backup·restore·스크린샷은 README를 따른다. 운영 C·실제 merge/운영 배포는 이 통과로 승인되지 않는다.
+
+2026-10-20 후속 복구 검증: DB 경계11+Windows 실행 경계8+실제 API 강제 종료2=추가21개. 실제 whisper와 장시간 native 대역을 구분했다. API 강제 종료 전 native 생존/복구 시 이미 종료를 관찰했고 WAV1개 삭제·잔여0·task/run0, 별도 Windows 시험에서는 살아 있는 정확한 잔여 native1개 종료를 확인했다. 브라우저 추가3개는 복구 동의/version·실패 차단 유지·숨김 녹음 폐기다. 물리 마이크 성공을 주장하지 않는다. 최종 전체244/40과 기존 223/37 수락 이력을 구분한다.
 
 ## 문서 정합성 자체 감사
 
