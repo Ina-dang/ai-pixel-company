@@ -1,5 +1,7 @@
 # 문서 목차
 
+Windows 후속: [로그인 자동 실행](11-slack-integration.md#windows-로그인-자동-실행)을 현재 사용자·제한 권한으로 등록했다. Docker/DB 대기·중복 차단·제한 재시도·중지/제거 명령을 제공한다. 실제 세션 로그아웃/재부팅과 등록 action의 실행 검증은 구분한다.
+
 2026-10-21 후속: [Socket Mode 로컬 수신](11-slack-integration.md#socket-mode-로컬-수신)을 구현하고 실제 Slack 상태 조회·업무 등록·API 재시작 후 수신을 확인했다. 기존 HTTP 터널 시험 기록은 과거 근거로 보존한다. 실제 merge·운영 배포는 실행하지 않았다.
 
 Slack 실제 명령 후속(2026-10-21): 새 30분 승인 범위에서 기존 시험 프로젝트에 상태 조회·업무 등록 각1회를 실제 Slack UI로 전송했다. 서명 수신/응답2건·TODO1건·원문과 공백2칸 보존·새 run0건을 DB/별도 Slack 조회/데스크톱·모바일로 확인하고 임시 tunnel·relay 종료 및 기존 URL 복원을 확인했다. 관련49개·lint/typecheck/build PASS다. 시험 업무는 할 일로 남겼고 merge·운영 배포·유료 API는 실행하지 않았다. README·11·14·체크리스트를 따른다.

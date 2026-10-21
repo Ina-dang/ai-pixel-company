@@ -2,13 +2,46 @@
 
 ## Socket Mode 로컬 수신
 
+### Windows 로그인 자동 실행
+
+2026-10-21 후속으로 현재 사용자 전용 Windows 작업 `AI Pixel Company Local API-6AA56973`을 등록했다. 작업명 접미사는 프로젝트 절대 경로의 SHA256 앞8자리이며 다른 checkout과 충돌하지 않는다. [Microsoft 로그온 트리거](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasktrigger?view=windowsserver2025-ps), [실행 주체](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal?view=windowsserver2025-ps), [작업 설정](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset?view=windowsserver2025-ps)(열람 2026-10-21)에 따라 사용자 로그온20초 후 Interactive·Limited 권한으로 숨김 실행한다. 비밀번호·토큰은 작업 인수에 넣지 않고 실행 정책·방화벽·공개 수신 포트를 변경하지 않는다. 로그아웃 상태에서 실행하는 시스템 서비스는 아니다.
+
+프로젝트 루트에서 다음 관리 명령을 사용한다. 설치/갱신 전에는 기존 작업을 중지한다. 작업의 사용자 SID·설명·권한·실행 경로가 다르면 덮어쓰거나 중지하지 않는다.
+
+```powershell
+powershell.exe -NoProfile -File scripts/windows-local-api.ps1 -Action Status
+powershell.exe -NoProfile -File scripts/windows-local-api.ps1 -Action Start
+powershell.exe -NoProfile -File scripts/windows-local-api.ps1 -Action Restart
+powershell.exe -NoProfile -File scripts/windows-local-api.ps1 -Action Stop
+powershell.exe -NoProfile -File scripts/windows-local-api.ps1 -Action Uninstall
+powershell.exe -NoProfile -File scripts/windows-local-api.ps1 -Action Install -NodePath C:\nodejs\node.exe
+```
+
+`Stop`은 현재 실행만 중지하며 다음 로그인에는 다시 시작한다. 로그인 자동 실행 자체를 제거하려면 `Uninstall`을 사용한다. 수동 `pnpm dev`로 개발할 때는 먼저 작업을 Stop하고, 개발 서버를 종료한 뒤 작업을 Start해 포트 충돌을 피한다.
+
+이미 이 PC의 Docker Desktop은 사용자 로그인 자동 시작 설정이 켜져 있었다. 관리 프로세스는 Docker를 최대180초 기다리고 기존 고정 PostgreSQL 이미지·볼륨만 시작한다(`--pull never --no-build`). 이미지 다운로드·빌드·DB 초기화/삭제를 하지 않는다. API 준비 대기는 최대90초, API 오류 시15초 대기 후 최대3번 재시도한다. 최초 포함 최대 실행 시도는 `1 + 3 = 4`회이며 작업 스케줄러 추가 재시도는 설정하지 않는다. 영구 실패는 `.local/windows-api/status.json`에 안전한 오류 코드로 남고 수동 Start/다음 로그인이 필요하다. Docker·설정 부재를 숨기지 않으며 포트3001 점유 시 기존 서버를 종료하지 않고 실패한다.
+
+IgnoreNew 작업 설정과 소유 프로세스 잠금으로 중복 실행을 막는다. 잠금은 PID뿐 아니라 프로세스 생성 시각·Node 실행 경로·프로젝트 관리 스크립트를 검사해 PID 재사용을 구분하며 다른 프로세스를 종료하지 않는다. Stop/Restart는 해당 실행 ID의 제어 파일과 자식 IPC로 정상 종료를 요청하고,45초 내 종료되지 않을 때만 검증된 작업 job을 중지한다. API가 부모 IPC를 잃으면 정상 정리를 시도한다. 로그는 자격 값·DB 주소·WebSocket 주소·개인 키를 가리고 `.local/windows-api/api.log`에2MB 기준으로 순환 보관한다. `.local` 전체는 Git 제외다.
+
+등록된 작업의 실제 시작·정상 중지/재시작 후 Slack 상태 응답을 확인했다. 첫 실행 supervisor/API PID `87264/109792`, 작업 재시작 후 `39880/68516`이었다. 해당 자식 API만 한 번 강제 종료하자 동일 supervisor가 API `110972`를 attempt1로 복구했고 중복 실행 요청은 PID를 바꾸지 않았다. 실제 Windows 로그아웃·재로그인/PC 재부팅은 사용자 세션 보존을 위해 수행하지 않았다. 로그온 트리거 설정 검사와 동일 등록 action의 실행 검증을 구분한다.
+
+PID 재사용 식별 보완을 적용한 마지막 정상 재시작 후 supervisor/API는 `17356/112952`였으며 생성 시각을 포함한 잠금·중복 차단·수신 상태와 동일 명령 근거를 다시 확인했다. Windows가 등록 시 SID를 계정명으로 정규화해 첫 설치 직후 신원 판별이 실패한 이력은 SID 재변환으로 수정했고, 최종 동일 사용자·Limited·Interactive 검사가 통과했다.
+
+실제 Slack 결과는 상태 조회2건과 복구 뒤 사용자가 보낸 도움말1건이다. 마지막 명령은 서버에서 HELP로 분류됐으며 STATUS로 바꾸어 기록하지 않는다. 세 명령 모두 transport=SOCKET·PROCESSED·reply=SENT이고 baseline 대비 업무·직원 실행·merge·연동 작업 변경은0이다. [작업 시작 뒤 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792547587402399), [작업 재시작 뒤 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792547658889609), [API 종료 복구 뒤 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792548446984179)을 각각 대조했다.
+
+`scripts/verify-windows-startup.ts baseline`은 기존 업무·실행·merge·연동 작업과 inbox를 읽기 전용으로 기록한다. `verify 1`, `verify 2`, `verify 3 HELP`는 각 단계의 실제 Socket 명령 분류·응답·동일 작업/포트 소유권을 확인하고 다른 상태가 바뀌면 실패한다. 마지막 명령 분류는 명시적으로 지정하며 기본은 STATUS다. Git 제외 `.local/windows-api-live.json`에 작업 주체·실행 PID·응답 근거를 보관한다.
+
+복구 후 실제 데스크톱·390px 모바일 smoke에서 수신 중 상태·기존 업무 TODO/hash·실행0·처리 기록 총12개를 확인했다. 페이지 오류0·업무 쓰기0·가로 넘침 없음이었다. 최초 실행 래퍼에서 브라우저 종료/빌드 명령의 시간 초과를 관측했으며 동일 브라우저 검사를 native batch 경로로 다시 실행해 정상 종료했다. 첫 전체 검사에서 음성 복구 테스트의 PowerShell 준비가 시간 초과했고 해당8개 단독 재검사는 통과했다. 최종 전체24파일/303개가 통과했으며, 해당 배치의300초 제한으로 건너뛴 뒤 명령은 별도 실행해 lint·typecheck·build·계약 검사를 모두 통과했다. 관리 프로세스 관련 테스트9개도 통과했다. 실패 이력과 최종 성공을 구분한다.
+
+API 자동 실행은 기존 권한/비용 가드와 Socket 연결만 유지한다. 대시보드·운영 배포·merge 권한을 추가하지 않는다. 이 구성에 새 유료 서비스·모델 호출은 없다.
+
 2026-10-21 현재 로컬 명령 연결은 `SOCKET` 모드를 사용한다. 아래 HTTP Request URL·터널 시험 기록은 이전 검증 이력이다. [Slack 공식 문서](https://docs.slack.dev/apis/events-api/using-socket-mode/)(열람 2026-10-21, 변경일 미공개)에 따라 공식 `@slack/socket-mode@3.1.0` SDK와 앱 수준 `connections:write` 토큰으로 외부 발신 WebSocket 연결을 연다. 신규 유료 서비스·유료 API·모델 호출은 사용하지 않았다.
 
 ### 로컬 설정과 실행 조건
 
 - Owner가 Slack 설정에서 Socket Mode를 켜고 앱 수준 토큰을 생성한다. 값은 Git 제외 `.local/integration-secrets/slack-app.txt`에 한 줄로 저장하며 채팅·로그에 출력하지 않는다.
 - `.local/integrations.json`의 명령용 Slack 연결에 `config.mode: "SOCKET"`, `config.appId`, 기존 team/channel/userMappings와 `secretRefs.appToken: "file:slack-app.txt"`, `secretRefs.botToken`을 지정한다. 기존 how-to-trash 발신 전용 연결의 사용자 매핑은 비워 둔다. 같은 앱 ID의 Socket 수신 연결을 중복 구성하지 않는다.
-- `pnpm dev` 또는 로컬 API 서버를 실행해야 수신한다. PC 절전·종료·네트워크 단절 중 수신 가용성을 보장하지 않는다. SDK로 연결하고 애플리케이션이 재연결 Promise를 처리한다. 연결 후 단절은 1·2·4·8·16·최대30초 간격으로 재시도하며 API를 다시 시작하면 저장된 설정으로 연결한다. Windows 부팅/로그인 자동 실행은 등록하지 않았다. 최초 시작 실패의 안전한 오류 코드를 확인한 뒤 원인을 고치고 API를 재시작한다.
+- 등록된 Windows 로그인 작업 또는 `pnpm dev`/로컬 API 서버가 실행 중이어야 수신한다. PC 절전·종료·네트워크 단절 중 수신 가용성을 보장하지 않는다. SDK로 연결하고 애플리케이션이 재연결 Promise를 처리한다. 연결 후 단절은 1·2·4·8·16·최대30초 간격으로 재시도하며 API를 다시 시작하면 저장된 설정으로 연결한다. 최초 Socket 시작 실패는 안전한 오류 코드를 확인한 뒤 원인을 고치고 API를 재시작한다.
 - 대시보드 → 명령 프로젝트 → 연동 현황의 ‘Slack 명령 수신 중/재연결 중/수신 중지/연결 확인 필요’와 마지막 연결·수신 시각으로 상태를 확인한다. 발신 연결의 설정 완료와 수신 중 상태는 별개다.
 
 ### 수신 경계

@@ -66,3 +66,8 @@ async function stop() {
 }
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
+// A local supervisor can request graceful shutdown over its private child IPC.
+if (process.connected) {
+  process.on('message', message => { if (message && typeof message === 'object' && 'type' in message && message.type === 'ai-pixel.shutdown') void stop(); });
+  process.on('disconnect', () => { void stop(); });
+}
