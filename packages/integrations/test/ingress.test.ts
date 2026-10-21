@@ -4,8 +4,8 @@ import { webhookRelay } from '../src/ingress.js';
 
 const path = '/api/webhooks/github/11111111-1111-4111-8111-111111111111';
 const servers: Server[] = [];
-async function start(fetcher: typeof fetch) {
-  const server = createServer(webhookRelay(new Set([path]), fetcher)); servers.push(server);
+async function start(fetcher: typeof fetch, allowedPath = path) {
+  const server = createServer(webhookRelay(new Set([allowedPath]), fetcher)); servers.push(server);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('LISTEN_FAILED');
   return `http://127.0.0.1:${address.port}`;
@@ -37,4 +37,17 @@ test('relay bounds body size and reports upstream failure without leaking diagno
   expect((await fetch(url + path, { method: 'POST', body: 'x'.repeat(262_145) })).status).toBe(413); expect(calls).toBe(0);
   const failed = await fetch(url + path, { method: 'POST', body: '{}' });
   expect(failed.status).toBe(502); expect(await failed.text()).not.toContain('sensitive-upstream-detail'); expect(calls).toBe(1);
+});
+test('Slack-only relay keeps signed form bytes and blocks the GitHub path', async () => {
+  const slackPath = path.replace('/github/', '/slack/'), raw = 'command=%2Fai-pixel&text=%EC%83%81%ED%83%9C'; let calls = 0;
+  const url = await start(async (target, init) => {
+    calls += 1; expect(String(target)).toBe(`http://127.0.0.1:3001${slackPath}`);
+    expect(new Headers(init?.headers).get('x-slack-signature')).toBe('v0=signature');
+    expect(new Headers(init?.headers).get('x-slack-request-timestamp')).toBe('123');
+    expect(Buffer.from(init?.body as Buffer).toString('utf8')).toBe(raw);
+    return new Response('{"received":true}');
+  }, slackPath);
+  expect((await fetch(url + path, { method: 'POST', body: raw })).status).toBe(404);
+  expect((await fetch(url + slackPath, { method: 'POST', body: raw, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Slack-Signature': 'v0=signature', 'X-Slack-Request-Timestamp': '123' } })).status).toBe(200);
+  expect(calls).toBe(1);
 });

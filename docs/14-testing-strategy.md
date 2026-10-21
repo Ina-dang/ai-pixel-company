@@ -1,5 +1,13 @@
 # 테스트·품질·에이전트 평가
 
+## Slack 명령 실제 수신 후속 — 2026-10-21
+
+최종 관련49개 = 연동34 + 보고11 + 중계4, lint·typecheck·전체 build를 통과했다. 전체 Chromium 회귀를 새로 실행한 수치는 아니며 아래 실제 데스크톱/모바일 시나리오와 구분한다.
+
+실제 Slack 작성기에서 상태·업무 등록 각1회만 보내고 서명 수신→durable 처리→같은 채널 결과 응답을 확인했다. 상태 직후 업무 증가0, 최종 TODO1·source SLACK·원문/공백2칸/SHA 보존, 기존 task/run/merge/연동 operation 불변을 사전 snapshot과 비교했다. 별도 connector가 실제 두 응답을 읽어 정확한 업무 링크를 대조했다. DB 검증기는 처음 postgres RowList prototype과 저장된 JSON 배열을 직접 비교해 실패했으나 값 정규화 후 성공했다. 재검증은 read-only이며 명령 재전송은 없었다.
+
+실제 브라우저에서 등록 task의 원문 해시·run0·명령5건(이전3+이번2) PROCESSED/SENT·모바일 가로 넘침 없음·업무 변경0·페이지 오류0을 확인했다. 화면은 `test-results/phase3-slack-live-desktop.png`, `test-results/phase3-slack-live-mobile.png`다. 실제 수신 시험 뒤 터널과 relay를 닫아 process/listener 없음·외부530을 확인했다. 대시보드·Owner API·GitHub 경로404 및 unsigned Slack403도 실제 공개 주소에서 검사했다. Slack 설정의 원래 Request URL도 복원 후 재조회했다.
+
 ## Slack 업무 보고 후속 — 2026-10-21
 
 최종 관련 55개 = 연동 34 + 보고 11 + 전달/링크 10을 통과했다. 업무명 출처·후보 일치·실패/미실행 구분·상태별 다음 행동·과거 개발 설명과 현재 검증의 구분·특수문자/비밀 패턴·길이 제한·안전한 커밋 링크·권한/중복·UNKNOWN 유지와 GitHub 권한 확장 금지를 확인한다. 새 repository fixture 시험은 immutable source와 active run 유일성 제약에 두 번 걸렸고, 원본을 변경하지 않는 수락 완료 시험 run을 생성하도록 수정한 뒤 통과했다. 제약을 완화하지 않았다.

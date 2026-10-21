@@ -1,5 +1,19 @@
 # Slack 협업과 사용자 보고
 
+## 실제 상태·업무 등록 후속 — 2026-10-21
+
+Owner가 기존 `내손비/#ai-pixel-test`의 상태 조회1회·시험 업무 등록1회와 Slack POST 한 경로만 최대30분 공개하도록 새로 승인했다. 기존 `/ai-pixel` 명령의 Request URL만 임시 변경했으며 새 scope·설치·user mapping은 추가하지 않았다. 대상은 기존 매핑 프로젝트 `56c54d8a-de76-4400-8308-a63b1bd2adaa`이며 how-to-trash의 발신 전용 연결은 그대로다.
+
+Chrome Slack 작성기에서 `/ai-pixel 상태`와 `/ai-pixel 업무 Slack 명령 실제 검증 20261021-5dd4e94e — 공백  2칸 유지, 자동 실행·수락·merge·운영 배포 금지`를 각1회 전송했다. 본문 재생이나 직접 inbox 주입은 사용하지 않았다. 실제 서명된 요청은 각각 `5cc7d4c4-34f6-408c-8f91-e5ff5199bf7a`, `f30cbea0-c384-4964-a28a-c7fb9b746eda`로 PROCESSED·SENT가 됐고 별도 Slack 조회로 다섯 보고 항목과 정확한 상세 링크를 확인했다. [상태 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792542921422889), [업무 등록 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792542952597479).
+
+상태 조회 직후 업무 증가0건, 업무 등록 후 TODO1건(`852c6d52-0749-4584-bf5b-b0e1e87e3470`), source=SLACK, 한국어 원문·공백2칸·SHA256 보존을 확인했다. 사전 DB snapshot과 비교해 기존 task 상태·조직 전체 run id/status/version/turn·merge 상태·integration operation이 그대로였다. 새 모델 실행·결과 수락·merge·운영 배포는 없었다. 시험 TODO는 삭제·자동 실행하지 않고 남겼다.
+
+`scripts/slack-command-tunnel.ts <connectionId> --approved-30-minutes`는 loopback3002와 지정 Slack POST 한 경로만 연결하고30분 만료 또는 일치하는 sessionId의 로컬 종료 요청에서 중계와 cloudflared를 함께 종료한다. 임시 hostname과 만료·종료 상태는 Git 제외 `.local/slack-command-tunnel.json`에 기록한다. 공식 [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)(업데이트2026-09-30), [Slack slash commands](https://docs.slack.dev/interactivity/implementing-slash-commands/)(개별 변경일 미공개)를2026-10-21 확인했다. 새 요금제·유료 API·도메인은 사용하지 않았다.
+
+실제 공개 주소에서 대시보드/Owner API/GitHub POST/Slack GET은404, unsigned Slack POST는403이었다. 시험 후 helper/cloudflared 프로세스와3002 listener가 사라졌고 외부 주소는530으로 종료를 확인했다. Slack의 Request URL은 시험 전 주소로 복원한 후 설정을 다시 열어 저장값을 확인했다. 현재 상시 외부 수신은 불가하다.
+
+`scripts/verify-slack-commands.ts baseline|verify`는 실제 명령 전·후의 로컬 DB를 읽어 대조하며 Slack 발신이나 receipt 생성을 하지 않는다. 증거는 `.local/slack-commands-live.json`이다. 최초 비교는 postgres RowList와 JSON 배열의 prototype 차이로 실패했고 실제 행 값을 JSON 정규화해 재검증했다. 명령은 재전송하지 않았다. `scripts/phase3-slack-smoke.ts`로 실제 task 원문 해시·run0건·누적 명령5건(이전3+이번2)의 처리/응답 완료와 데스크톱/390px 화면, 업무 변경0·페이지 오류0을 검증했다. 최종 관련49개(연동34+보고11+중계4)·lint·typecheck·build를 통과했다.
+
 ## 업무 중심 보고 후속 — 2026-10-21
 
 결과 보고·업무 등록 응답·상태 조회를 업무명 → 변경 요약 → 검증 결과 → 다음 할 일 → 업무 상세 링크 순서로 표시한다. 상태 조회는 같은 조직·프로젝트의 최근 업무 3건과 업무별 최신 실행을 읽는다. 업무 등록은 미실행, 실패·중단은 중단 사유 확인, 검토 대기는 수락 여부 결정, 수락 완료는 후속 업무 결정으로 안내한다.
