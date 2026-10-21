@@ -1,5 +1,7 @@
 # 문서 목차
 
+대시보드 자동 실행 후속: 기존 Windows 로그인 작업에 API·웹 독립 관리를 추가했다. 두 서버의 준비/중지/재시작·웹만 복구·실제 대시보드 검증과 이전 API 전용 근거는 [로그인 자동 실행](11-slack-integration.md#windows-로그인-자동-실행)에서 구분한다. 실제 Windows 재로그인/재부팅·merge·운영 배포는 미실행이다.
+
 Windows 후속: [로그인 자동 실행](11-slack-integration.md#windows-로그인-자동-실행)을 현재 사용자·제한 권한으로 등록했다. Docker/DB 대기·중복 차단·제한 재시도·중지/제거 명령을 제공한다. 실제 세션 로그아웃/재부팅과 등록 action의 실행 검증은 구분한다.
 
 2026-10-21 후속: [Socket Mode 로컬 수신](11-slack-integration.md#socket-mode-로컬-수신)을 구현하고 실제 Slack 상태 조회·업무 등록·API 재시작 후 수신을 확인했다. 기존 HTTP 터널 시험 기록은 과거 근거로 보존한다. 실제 merge·운영 배포는 실행하지 않았다.

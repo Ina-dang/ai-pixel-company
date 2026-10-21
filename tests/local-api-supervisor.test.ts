@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { redactLog, sameProcessOwner, StartupError, supervise, waitUntil } from '../scripts/local-api-supervisor.mjs';
+import { redactLog, sameProcessOwner, StartupError, supervise, waitUntil, webBuildReady, workspaceState } from '../scripts/local-api-supervisor.mjs';
 
 test('readiness waits through delayed Docker startup and respects a bounded timeout', async () => {
   let time = 0, checks = 0;
@@ -59,4 +59,40 @@ test('a reused PID is not the saved supervisor and malformed ownership fails clo
   expect(sameProcessOwner(saved, { ...saved })).toBe(true);
   expect(sameProcessOwner(saved, { pid: 123, createdAt: '2026-10-21T02:00:00.000Z' })).toBe(false);
   expect(sameProcessOwner(saved, null)).toBe(false); expect(sameProcessOwner({ pid: 123 }, saved)).toBe(false);
+});
+
+test('only a prepared dashboard build with the pinned local API rewrite can start', () => {
+  const route = { source: '/api/v1/:path*', destination: 'http://127.0.0.1:3001/api/v1/:path*' };
+  const manifest = { rewrites: { beforeFiles: [], afterFiles: [route], fallback: [] } };
+  expect(webBuildReady('approved-local-build', manifest)).toBe(true);
+  expect(webBuildReady('', manifest)).toBe(false); expect(webBuildReady('build', {})).toBe(false);
+  expect(webBuildReady('build', { rewrites: [{ ...route, destination: 'https://external.test/api/v1/:path*' }] })).toBe(false);
+  expect(webBuildReady('build', { rewrites: [route, { source: '/:path*', destination: 'https://external.test/:path*' }] })).toBe(false);
+});
+
+test('combined workspace readiness distinguishes partial failure and preserves the healthy service', () => {
+  const api = { state: 'RUNNING', apiPid: 1, attempt: 0 }, web = { state: 'RUNNING', webPid: 2, attempt: 1 };
+  expect(workspaceState({ api, web })).toMatchObject({ state: 'RUNNING', apiPid: 1, webPid: 2 });
+  expect(workspaceState({ api, web: { state: 'ERROR', errorCode: 'WEB_BUILD_MISSING' } })).toMatchObject({ state: 'DEGRADED', apiPid: 1, webPid: null });
+  expect(workspaceState({ api: { state: 'ERROR' }, web })).toMatchObject({ state: 'DEGRADED', apiPid: null, webPid: 2 });
+  expect(workspaceState({ api: { state: 'STOPPED' }, web: { state: 'STOPPED' } }).state).toBe('STOPPED');
+});
+
+test('web child recovery has its own PID and retry budget without changing the API state', async () => {
+  let launches = 0, stopped = false; const api = { state: 'RUNNING', apiPid: 77 }, states: Array<Record<string, unknown>> = [];
+  const code = await supervise({ service: 'WEB', prepare: async () => undefined, stopped: () => stopped,
+    record: (web: Record<string, unknown>) => { states.push(workspaceState({ api, web })); },
+    launch: async () => { const index = ++launches; return { pid: index, ready: async () => true, exited: () => index === 1, stop: async () => undefined }; },
+    sleep: async (ms: number) => { if (ms === 500) stopped = true; } });
+  expect(code).toBe(0); expect(launches).toBe(2); expect(states.every(state => state.apiPid === 77)).toBe(true);
+  expect(states.some(state => state.state === 'DEGRADED')).toBe(true);
+  expect(states.filter(state => state.state === 'RUNNING').map(state => state.webPid)).toEqual([1, 2]);
+});
+
+test('missing web build fails once while a healthy API remains represented as running', async () => {
+  const api = { state: 'RUNNING', apiPid: 77 }; let last: Record<string, unknown> = {};
+  expect(await supervise({ service: 'WEB', prepare: async () => { throw new StartupError('WEB_BUILD_MISSING'); },
+    launch: async () => { throw new Error('must not launch'); }, stopped: () => false, record: (web: Record<string, unknown>) => { last = workspaceState({ api, web }); },
+    sleep: async () => { throw new Error('must not retry'); } })).toBe(1);
+  expect(last).toMatchObject({ state: 'DEGRADED', apiPid: 77, webPid: null });
 });

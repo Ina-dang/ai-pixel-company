@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, appendFileSync, statSync, renameSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { StartupError, redactLog, sameProcessOwner, supervise, waitUntil } from './local-api-supervisor.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { StartupError, redactLog, sameProcessOwner, supervise, waitUntil, webBuildReady, workspaceState } from './local-api-supervisor.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const area = resolve(root, '.local/windows-api'), launchId = randomUUID();
@@ -13,6 +13,8 @@ let stopping = false;
 const read = path => { try { return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 const stopped = () => stopping || read(stopPath)?.launchId === launchId;
 const record = value => writeFileSync(statusPath, JSON.stringify({ ...value, supervisorPid: process.pid, launchId, updatedAt: new Date().toISOString() }));
+const services = { api: { state: 'STARTING' }, web: { state: 'STARTING' } };
+const serviceRecord = name => value => { services[name] = value; record(workspaceState(services)); };
 
 function command(args, timeout = 15_000) {
   return new Promise(resolveCommand => {
@@ -25,9 +27,9 @@ function command(args, timeout = 15_000) {
   });
 }
 
-function logStream(stream) {
+function logStream(stream, service) {
   let buffer = '', privateKey = false;
-  const log = resolve(area, 'api.log');
+  const log = resolve(area, `${service}.log`);
   const line = text => {
     if (/-----BEGIN .*PRIVATE KEY-----/.test(text)) privateKey = true;
     const end = /-----END .*PRIVATE KEY-----/.test(text);
@@ -46,40 +48,56 @@ function logStream(stream) {
   stream.on('end', () => { if (buffer) line(buffer); });
 }
 
-async function prepare() {
+async function prepare(report) {
   if (!existsSync(resolve(root, '.local/runtime.json')) || !existsSync(resolve(root, '.local/compose.env'))) throw new StartupError('LOCAL_CONFIG_MISSING');
-  record({ state: 'WAITING_DOCKER' });
+  report({ state: 'WAITING_DOCKER' });
   if (!await waitUntil(async () => await command(['info', '--format', '{{.ServerVersion}}']) === 0, { timeoutMs: 180_000, intervalMs: 5000, stopped })) throw new StartupError('DOCKER_NOT_READY');
-  record({ state: 'WAITING_DATABASE' });
+  report({ state: 'WAITING_DATABASE' });
   // Existing pinned image/volume only. Never download an image, build, or reset data at logon.
   if (await command(['compose', '--env-file', '.local/compose.env', 'up', '-d', '--pull', 'never', '--no-build', '--wait', '--wait-timeout', '90', 'postgres'], 100_000) !== 0) throw new StartupError('DATABASE_NOT_READY');
 }
 
-async function portAvailable() {
+async function portAvailable(port) {
   return new Promise(resolvePort => {
     const server = createServer(); server.once('error', () => resolvePort(false));
-    server.listen(3001, '127.0.0.1', () => server.close(() => resolvePort(true)));
+    server.listen(port, '127.0.0.1', () => server.close(() => resolvePort(true)));
   });
 }
 
-async function launch() {
-  if (!await portAvailable()) throw new StartupError('PORT_IN_USE');
-  const child = spawn(process.execPath, ['--import', 'tsx', resolve(root, 'apps/api/src/server.ts')], {
-    cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, API_PORT: '3001' },
+async function prepareWeb(report) {
+  const folder = resolve(root, 'apps/web/.next');
+  if (!existsSync(resolve(folder, 'BUILD_ID')) || !existsSync(resolve(folder, 'routes-manifest.json'))) throw new StartupError('WEB_BUILD_MISSING');
+  let valid = false;
+  try { valid = webBuildReady(readFileSync(resolve(folder, 'BUILD_ID'), 'utf8'), read(resolve(folder, 'routes-manifest.json'))); } catch { /* fail closed */ }
+  if (!valid) throw new StartupError('WEB_BUILD_INVALID');
+  report({ state: 'WAITING_API' });
+  if (!await waitUntil(async () => {
+    if (services.api.state !== 'RUNNING') return false;
+    try { return (await fetch('http://127.0.0.1:3001/health/live', { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
+  }, { timeoutMs: 300_000, stopped })) throw new StartupError('API_NOT_READY');
+}
+
+async function launch(service = 'API') {
+  const web = service === 'WEB', port = web ? 3000 : 3001;
+  if (!await portAvailable(port)) throw new StartupError('PORT_IN_USE');
+  const args = web ? ['--import', pathToFileURL(resolve(root, 'scripts/local-web-lifecycle.mjs')).href, resolve(root, 'apps/web/node_modules/next/dist/bin/next'), 'start', '--hostname', '127.0.0.1', '--port', '3000']
+    : ['--import', 'tsx', resolve(root, 'apps/api/src/server.ts')];
+  const child = spawn(process.execPath, args, {
+    cwd: web ? resolve(root, 'apps/web') : root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, API_PORT: '3001' },
   });
   let exited = false;
   child.on('error', () => { exited = true; }); child.on('exit', () => { exited = true; });
-  logStream(child.stdout); logStream(child.stderr);
+  logStream(child.stdout, web ? 'web' : 'api'); logStream(child.stderr, web ? 'web' : 'api');
   return {
     pid: child.pid, exited: () => exited,
     ready: stop => waitUntil(async () => {
-      if (exited) throw new StartupError('API_EXITED');
-      try { return (await fetch('http://127.0.0.1:3001/health/live', { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
+      if (exited) throw new StartupError(`${service}_EXITED`);
+      try { return (await fetch(web ? 'http://127.0.0.1:3000/' : 'http://127.0.0.1:3001/health/live', { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
     }, { timeoutMs: 90_000, stopped: stop }),
     async stop() {
       if (exited) return;
       if (child.connected) child.send({ type: 'ai-pixel.shutdown' }, () => undefined);
-      if (!await waitUntil(() => exited, { timeoutMs: 30_000, intervalMs: 200 })) child.kill();
+      if (!await waitUntil(() => exited, { timeoutMs: web ? 7000 : 30_000, intervalMs: 200 })) child.kill();
     },
   };
 }
@@ -107,5 +125,12 @@ if (!identity) throw new StartupError('OWNER_IDENTITY_UNAVAILABLE');
 try { writeFileSync(lockPath, JSON.stringify({ ...identity, launchId }), { flag: 'wx' }); }
 catch (error) { if (error.code === 'EEXIST') process.exit(0); throw error; }
 process.on('SIGINT', () => { stopping = true; }); process.on('SIGTERM', () => { stopping = true; });
-try { process.exitCode = await supervise({ prepare, launch, stopped, record }); }
+try {
+  const results = await Promise.all([
+    supervise({ prepare: () => prepare(serviceRecord('api')), launch: () => launch('API'), stopped, record: serviceRecord('api') }),
+    supervise({ prepare: () => prepareWeb(serviceRecord('web')), launch: () => launch('WEB'), stopped, record: serviceRecord('web'), service: 'WEB' }),
+  ]);
+  record({ ...workspaceState(services), state: stopped() ? 'STOPPED' : 'ERROR' });
+  process.exitCode = stopped() ? 0 : Math.max(...results);
+}
 finally { if (read(lockPath)?.launchId === launchId) unlinkSync(lockPath); }

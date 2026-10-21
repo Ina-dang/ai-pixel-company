@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 // Read-only verification of an already received Slack command. Never posts to Slack or starts work.
 const [projectId, taskId] = process.argv.slice(2);
 const socket = process.argv.includes('--socket');
+const workspace = process.argv.includes('--workspace');
 assert(projectId && taskId && /^[a-f0-9-]{36}$/.test(projectId) && /^[a-f0-9-]{36}$/.test(taskId));
 process.env.PLAYWRIGHT_BROWSERS_PATH = resolve('.local/playwright');
 const { chromium, expect } = await import('@playwright/test');
@@ -33,11 +34,14 @@ try {
   const taskReports = history.getByText(new RegExp(taskId));
   assert(await taskReports.count() > 0);
   for (let index = 0; index < await taskReports.count(); index++) await expect(taskReports.nth(index)).toBeVisible();
-  const desktop = socket ? '.local/browser-evidence/slack-socket-desktop.png' : 'test-results/phase3-slack-live-desktop.png';
-  const mobile = socket ? '.local/browser-evidence/slack-socket-mobile.png' : 'test-results/phase3-slack-live-mobile.png';
+  const desktop = workspace ? '.local/browser-evidence/windows-dashboard-desktop.png' : socket ? '.local/browser-evidence/slack-socket-desktop.png' : 'test-results/phase3-slack-live-desktop.png';
+  const mobile = workspace ? '.local/browser-evidence/windows-dashboard-mobile.png' : socket ? '.local/browser-evidence/slack-socket-mobile.png' : 'test-results/phase3-slack-live-mobile.png';
   const evidence = socket ? area.getByRole('region', { name: 'Slack 연결', exact: true }) : history;
   if (socket) await expect(evidence.getByRole('status')).toContainText('Slack 명령 수신 중');
-  mkdirSync(socket ? '.local/browser-evidence' : 'test-results', { recursive: true }); await evidence.screenshot({ path: desktop });
+  mkdirSync(socket || workspace ? '.local/browser-evidence' : 'test-results', { recursive: true });
+  if (workspace) {
+    await area.getByRole('heading', { name: '업무와 협업', exact: true }).scrollIntoViewIfNeeded(); await page.screenshot({ path: desktop });
+  } else await evidence.screenshot({ path: desktop });
   await page.setViewportSize({ width: 390, height: 844 }); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await evidence.screenshot({ path: mobile });
   assert.deepEqual(errors, []); assert.deepEqual(mutations, []);

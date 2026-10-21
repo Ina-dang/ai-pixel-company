@@ -1,6 +1,6 @@
 # AI Pixel Company
 
-Slack 명령은 Socket Mode로 이 PC에서 수신할 수 있습니다. 현재 사용자로 Windows에 로그인하면 등록된 작업이 Docker·DB 준비 후 로컬 API를 자동 실행합니다. 임시 터널이나 공개 Request URL은 필요하지 않으며 PC가 깨어 있어야 합니다. 설정·중지·재시작·검증 범위는 [Windows 로그인 자동 실행](docs/11-slack-integration.md#windows-로그인-자동-실행)을 참고하세요. 웹 대시보드 자동 실행은 별도입니다.
+현재 사용자로 Windows에 로그인하면 등록된 작업이 Docker·DB 준비 후 로컬 API와 웹 대시보드 서버를 함께 실행합니다. 대시보드는 [이 PC에서 열기](http://127.0.0.1:3000/)로 접속할 수 있고 Slack 명령은 Socket Mode로 수신합니다. PC가 깨어 있어야 합니다. 설정·빌드 준비·중지·재시작·검증 범위는 [Windows 로그인 자동 실행](docs/11-slack-integration.md#windows-로그인-자동-실행)을 참고하세요.
 
 최신성 체크: 2026-10-21 Slack 상태·업무 등록 실제 수신 검증. 이전 사무실·결과 패널·보고 형식 검증과 구분한다.
 

@@ -4,7 +4,24 @@
 
 ### Windows 로그인 자동 실행
 
-2026-10-21 후속으로 현재 사용자 전용 Windows 작업 `AI Pixel Company Local API-6AA56973`을 등록했다. 작업명 접미사는 프로젝트 절대 경로의 SHA256 앞8자리이며 다른 checkout과 충돌하지 않는다. [Microsoft 로그온 트리거](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasktrigger?view=windowsserver2025-ps), [실행 주체](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal?view=windowsserver2025-ps), [작업 설정](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset?view=windowsserver2025-ps)(열람 2026-10-21)에 따라 사용자 로그온20초 후 Interactive·Limited 권한으로 숨김 실행한다. 비밀번호·토큰은 작업 인수에 넣지 않고 실행 정책·방화벽·공개 수신 포트를 변경하지 않는다. 로그아웃 상태에서 실행하는 시스템 서비스는 아니다.
+대시보드 후속(2026-10-21): 기존 작업명 `AI Pixel Company Local API-6AA56973`과 현재 사용자·Limited·Interactive·로그온20초 지연을 유지하고 API와 웹을 각각 관리한다. 브라우저에서 `http://127.0.0.1:3000/`에 접속한다. 아래 최초 API 전용 검증 기록은 이전 단계의 근거로 보존한다.
+
+| 서버 | 로컬 주소 | 시작·복구 조건 |
+|---|---|---|
+| API | `127.0.0.1:3001` | 기존 Docker/DB 준비 뒤 시작. 최대3회 재시도 |
+| 웹 대시보드 | `127.0.0.1:3000` | 준비된 빌드와 이 작업이 소유한 API 준비를 확인한 뒤 시작. 최대3회 독립 재시도 |
+
+웹만 종료되면 API를 유지하고 웹만15초 뒤 다시 띄운다. 한 서비스가 재시도 한도에 도달하면 다른 서비스를 유지하며 전체 상태를 DEGRADED로 표시한다. 양쪽이 준비돼야 RUNNING이다. `.local/windows-api/status.json`의 services.api/web과 각 PID·attempt를 확인한다. 웹 로그는 기존 자격 값 제거·순환 정책으로 `web.log`에 분리한다. Stop/Restart는 두 서버에만 적용하며 웹도 부모 IPC 종료 시 정리한다.
+
+로그인 때 빌드·패키지 다운로드를 하지 않는다. 기존 [Next CLI](https://nextjs.org/docs/app/api-reference/cli/next)(열람2026-10-21, 변경일 미확인)의 `next start --hostname 127.0.0.1 --port 3000`을 사용한다. 미리 `pnpm build`로 `.next/BUILD_ID`와 API의 고정 loopback rewrite가 있는 빌드를 준비한다. 없으면 WEB_BUILD_MISSING, 주소가 다르면 WEB_BUILD_INVALID로 웹만 차단한다. 브랜치/코드 변경으로 빌드를 갱신할 때는 작업을 Stop → build → Start한다. 수동 `pnpm dev`도 기존 작업을 먼저 Stop한다. 실행 정책·방화벽·권한·새 유료 서비스를 추가하지 않는다.
+
+실제 등록 action으로 API/웹 시작과 웹 강제 종료 후 복구를 대조했다. API `116336`·웹 `93656`에서 웹만 `121560`으로 복구됐고 API와 supervisor `100580`은 유지됐다. 두 서버 정상 중지 후 재시작도 확인했다. `scripts/verify-windows-dashboard.ts baseline|started|web-recovered|restarted`는 작업 권한·두 loopback 포트의 실제 소유 PID·HTTP 응답과 업무/실행/merge/연동 작업/inbox 변경0을 검사한다. Git 제외 `.local/windows-dashboard-live.json`에 단계별 근거를 저장한다. 새 Slack 명령·직원 실행은 이 시험에 필요하지 않다. 실제 Windows 로그아웃·재로그인/PC 재부팅은 수행하지 않는다.
+
+최종 정상 재시작은 supervisor `81096` 아래 API `93240`·웹 `118584`로 확인했고 중복 관리 프로세스 실행은 차단됐다. 실제 데스크톱/모바일에서 페이지 오류0·업무 쓰기0·가로 넘침 없음·Socket CONNECTED와 기존 업무/이력을 대조했다. 최종 테스트는25파일을 겹치지 않는 두 묶음으로 실행해 `121 + 188 = 309`개 통과했다. 관련15개는 이 수치에 포함되며 lint·typecheck·build·계약 검사도 통과했다.
+
+실제 대시보드 브라우저 확인은 `scripts/phase3-slack-smoke.ts <projectId> <taskId> --socket --workspace`로 로그인·프로젝트/업무 선택·상세/연동 상태·원문/hash·실행0을 대조한다. 데스크톱 화면과390px 모바일 근거는 `.local/browser-evidence/windows-dashboard-desktop.png`, `windows-dashboard-mobile.png`에 저장한다. 최초 IPC 테스트2건 실패는 Windows preload 경로를 `file:` URL로 수정해 해결했고 관련15개를 재검증했다.
+
+최초 API 전용 단계(2026-10-21)에 현재 사용자 전용 Windows 작업 `AI Pixel Company Local API-6AA56973`을 등록했다. 작업명 접미사는 프로젝트 절대 경로의 SHA256 앞8자리이며 다른 checkout과 충돌하지 않는다. [Microsoft 로그온 트리거](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasktrigger?view=windowsserver2025-ps), [실행 주체](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal?view=windowsserver2025-ps), [작업 설정](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset?view=windowsserver2025-ps)(열람 2026-10-21)에 따라 사용자 로그온20초 후 Interactive·Limited 권한으로 숨김 실행한다. 비밀번호·토큰은 작업 인수에 넣지 않고 실행 정책·방화벽·공개 수신 포트를 변경하지 않는다. 로그아웃 상태에서 실행하는 시스템 서비스는 아니다.
 
 프로젝트 루트에서 다음 관리 명령을 사용한다. 설치/갱신 전에는 기존 작업을 중지한다. 작업의 사용자 SID·설명·권한·실행 경로가 다르면 덮어쓰거나 중지하지 않는다.
 
