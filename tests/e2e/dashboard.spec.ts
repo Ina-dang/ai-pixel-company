@@ -44,6 +44,7 @@ test('project and Korean task persist; another authenticated browser receives SS
   await page.reload();
   await page.getByLabel('현재 프로젝트', { exact: true }).selectOption({ label: projectName });
   await page.getByRole('button', { name: `업무 상세: ${title}`, exact: true }).click();
+  await page.getByText('요청 원문·수용 기준·상태 이력 확인', { exact: true }).click();
   await expect(page.getByText(original, { exact: true })).toBeVisible();
   await expect(page.locator('script').filter({ hasText: 'alert(1)' })).toHaveCount(0);
 

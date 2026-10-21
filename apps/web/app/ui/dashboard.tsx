@@ -9,6 +9,9 @@ import { PixelOffice } from './office';
 import { CollaborationWorkspace } from './collaboration';
 import { chooseSnapshot, ProjectEventGate } from './office-model';
 import { VoiceInput, type VoiceCandidate } from './voice-input';
+import { dashboardLink, verificationName } from './result-model';
+import { ProjectResultContext, ResultSummary } from './result-summary';
+import './result-panel.css';
 
 type Submission = { body: string; key: string } | null;
 
@@ -39,6 +42,11 @@ export function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const authGeneration = useRef(0);
+  const chooseProject = useCallback((id: string) => {
+    setProjectId(id); setError(''); setNotice('');
+    try { localStorage.setItem('ai-pixel:selected-project', id); } catch { /* Storage may be disabled. */ }
+    window.history.replaceState(null, '', dashboardLink(id));
+  }, []);
 
   const onError = useCallback((failure: unknown) => {
     if (failure instanceof ApiError && failure.status === 401) {
@@ -56,7 +64,9 @@ export function Dashboard() {
     const loaded = await allProjects(signal);
     if (signal?.aborted || generation !== authGeneration.current) return;
     setProjects(loaded);
-    setProjectId(current => loaded.some(project => project.id === current) ? current : loaded[0]?.id ?? "");
+    let remembered = ''; try { remembered = localStorage.getItem('ai-pixel:selected-project') ?? ''; } catch { /* Storage may be disabled. */ }
+    const requested = new URLSearchParams(window.location.search).get('project');
+    setProjectId(current => [current, requested, remembered].find(id => loaded.some(project => project.id === id)) ?? loaded.find(project => !verificationName(project))?.id ?? loaded[0]?.id ?? "");
   }, []);
 
   useEffect(() => {
@@ -139,16 +149,16 @@ export function Dashboard() {
         {notice && <p className="success-notice" role="status">{notice}</p>}
         {(showProjectForm || projects.length === 0) && <ProjectForm session={session} onError={onError} onCreated={async project => {
           await loadProjects();
-          setProjectId(project.id);
+          chooseProject(project.id);
           setShowProjectForm(false);
           setError("");
           setNotice(`프로젝트 ‘${project.name}’을 만들었습니다.`);
         }} />}
         {projects.length > 0 && <section className="project-bar" aria-label="프로젝트 선택">
-          <div><label htmlFor="project-picker">현재 프로젝트</label><select id="project-picker" value={projectId} onChange={event => { setProjectId(event.target.value); setError(""); setNotice(""); }}>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
+          <div><label htmlFor="project-picker">현재 프로젝트</label><select id="project-picker" value={projectId} onChange={event => chooseProject(event.target.value)}><optgroup label="업무 프로젝트">{projects.filter(project => !verificationName(project)).map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</optgroup><optgroup label="검증·시험 이름의 프로젝트">{projects.filter(verificationName).map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</optgroup></select></div>
           <div className="repository-meta"><span>연결 저장소</span><strong>{activeProject?.repositoryUrl || "저장소 미지정"}</strong><small>기본 브랜치 · {activeProject?.defaultBranch ?? "—"}</small></div>
         </section>}
-        {activeProject ? <ProjectWorkspace key={activeProject.id} project={activeProject} session={session} onError={onError} onSelectProject={setProjectId} /> : <section className="empty-state panel"><span className="empty-mark" aria-hidden="true">＋</span><h2>첫 프로젝트를 만들어 주세요</h2><p>프로젝트를 만들면 업무 원문과 수용 기준을 등록할 수 있습니다.</p></section>}
+        {activeProject ? <ProjectWorkspace key={activeProject.id} project={activeProject} session={session} onError={onError} onSelectProject={chooseProject} /> : <section className="empty-state panel"><span className="empty-mark" aria-hidden="true">＋</span><h2>첫 프로젝트를 만들어 주세요</h2><p>프로젝트를 만들면 업무 원문과 수용 기준을 등록할 수 있습니다.</p></section>}
         <footer className="page-footer">AI PIXEL COMPANY <span>화면의 업무 상태는 서버 기록을 기준으로 표시합니다.</span></footer>
       </main>
     </div>
@@ -203,7 +213,11 @@ function ProjectWorkspace({ project, session, onError, onSelectProject }: { proj
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [events, setEvents] = useState<CompanyEvent[]>([]);
   const [connection, setConnection] = useState("연결 준비 중");
-  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [selectedTaskId, setTaskId] = useState<string | null>(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('task'));
+  const setSelectedTaskId = (id: string) => {
+    setTaskId(id); window.history.replaceState(null, '', dashboardLink(project.id, id || undefined));
+    if (id && window.innerWidth < 1200) window.requestAnimationFrame(() => document.getElementById('task-inspector')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
+  };
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadingError, setLoadingError] = useState("");
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -334,12 +348,12 @@ function ProjectWorkspace({ project, session, onError, onSelectProject }: { proj
   }, [project.id, onError]);
 
   const tasks = snapshot?.tasks ?? [];
-  const activeTask = tasks.find(task => task.id === selectedTaskId);
+  useEffect(() => { if (selectedTaskId === null && snapshot?.tasks.length === 1) setTaskId(snapshot.tasks[0].id); }, [selectedTaskId, snapshot?.tasks]);
+  const activeTask = tasks.find(task => task.id === selectedTaskId) ?? (selectedTaskId === null && tasks.length === 1 ? tasks[0] : undefined);
 
-  return <>
+  return <div className="workspace-with-inspector"><div className="workspace-content">
     <PixelOffice projectId={project.id} agents={snapshot?.agents} connection={loadingError ? '상태 확인 중' : connection} syncedAt={lastSyncedAt} onOpenTask={id => {
       setSelectedTaskId(id);
-      window.requestAnimationFrame(() => document.querySelector('.task-detail')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
     }} />
     <CollaborationWorkspace projectId={project.id} tasks={tasks} session={session} refreshKey={refreshKey} onOpenTask={setSelectedTaskId} onChanged={() => { void reloadRef.current?.(); }} onError={onError} onSelectProject={onSelectProject}/>
     <section className="summary-grid" aria-label="프로젝트 현황">
@@ -357,10 +371,11 @@ function ProjectWorkspace({ project, session, onError, onSelectProject }: { proj
       </section>
       <TaskForm projectId={project.id} session={session} onError={onError} onCreated={async task => { await reloadRef.current?.(); setSelectedTaskId(task.id); setRefreshKey(current => current + 1); }} />
     </div>
-    {activeTask && <TaskDetailPanel key={`${activeTask.id}:${activeTask.version}:${refreshKey}`} task={activeTask} onError={onError} onClose={() => setSelectedTaskId("")} />}
-    {activeTask && <WorkflowPanel key={activeTask.id} task={activeTask} project={project} session={session} subscription={subscription} refreshKey={refreshKey} onError={onError} onChanged={() => { void reloadRef.current?.(); void checkSubscriptionRef.current?.(); }} />}
     <section className="panel activity-panel" aria-labelledby="event-log-title"><div className="section-heading"><div><span className="eyebrow">ACTIVITY</span><h2 id="event-log-title">실시간 변경 기록</h2></div><span className="muted small">현재 연결에서 받은 최근 알림</span></div>{events.length === 0 ? <p className="inline-empty">아직 수신한 변경 알림이 없습니다. 업무의 저장 이력은 업무 상세에서 확인할 수 있습니다.</p> : <ol className="event-list">{events.map(entry => <li key={entry.eventId}><span className="event-dot" aria-hidden="true" /><strong>{eventLabels[entry.type] ?? entry.type}</strong><code>#{entry.sequence}</code><time dateTime={entry.timestamp}>{formatTime(entry.timestamp)} KST</time></li>)}</ol>}</section>
-  </>;
+  </div><aside id="task-inspector" className="result-inspector" aria-label="프로젝트와 업무 상세" tabIndex={-1}>
+    <ProjectResultContext project={project} taskCount={tasks.length} />
+    {activeTask ? <><WorkflowPanel key={activeTask.id} task={activeTask} project={project} session={session} subscription={subscription} refreshKey={refreshKey} onError={onError} onChanged={() => { void reloadRef.current?.(); void checkSubscriptionRef.current?.(); }} /><TaskDetailPanel key={`${activeTask.id}:${activeTask.version}:${refreshKey}`} task={activeTask} onError={onError} onClose={() => setSelectedTaskId("")} /></> : <div className="result-context"><h3>확인할 업무를 선택하세요</h3>{tasks.map(task => <p key={task.id}><button className="text-button" type="button" onClick={() => setSelectedTaskId(task.id)}>{task.title} · {task.statusLabelKo}</button></p>)}</div>}
+  </aside></div>;
 }
 
 function SummaryCard({ label, value, suffix, caption, subdued }: { label: string; value: string; suffix?: string; caption: string; subdued?: boolean }) {
@@ -451,6 +466,7 @@ function WorkflowPanel({ task, project, session, subscription, refreshKey, onErr
     {!loaded && !failure && <p role="status">실행 기록을 불러오는 중입니다…</p>}
     {loaded && (!latest || terminal) && <div className="workflow-actions"><button type="button" className="button primary" disabled={busy || !subscription?.ready || !["TODO", "FAILED"].includes(task.status)} onClick={() => void mutate(`/tasks/${encodeURIComponent(task.id)}/runs`, { fixture })}>{busy ? "실행 요청 중…" : realRepository ? "실제 저장소 업무 실행" : "검증 업무 실행"}</button><span className="muted small">구독 상태와 서버 실행 조건을 통과해야 시작합니다.</span></div>}
     {latest && <>
+      <ResultSummary run={latest} matchingEvidence={matchingEvidence} projectId={project.id} taskTitle={task.title} />
       <div className="run-meta"><span className="status-badge">실행: {runStatusLabels[latest.status]}</span><span>현재 단계: {latest.checkpoint.stage}</span><span>업무: {task.statusLabelKo}</span><span>실행 버전 {latest.version}</span></div>
       <p className="muted small run-identifier">실행 ID <code>{latest.id}</code> · {formatTime(latest.updatedAt)} KST</p>
       {latest.repositorySource && <p className="muted small">저장소: how-to-trash · 기준 커밋 <code>{latest.repositorySource.baseSha}</code> · 검증 결과는 아래 후보 SHA에 연결됩니다.</p>}
@@ -462,10 +478,10 @@ function WorkflowPanel({ task, project, session, subscription, refreshKey, onErr
         {realRepository && latest.status === "BLOCKED" && latest.checkpoint.stopReason === "DEVELOPER_CONTRACT_INVALID" && latest.checkpoint.verification && !latest.stopping && <button className="button secondary" type="button" disabled={busy || !subscription?.ready} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "reverify", expectedVersion: latest.version })}>같은 후보 다시 검증</button>}
       </div>}
       {!terminal && <div className="workflow-actions"><button className="button secondary" type="button" disabled={busy} onClick={() => void mutate(`/runs/${encodeURIComponent(latest.id)}/control`, { action: "cancel", expectedVersion: latest.version })}>실행 취소</button></div>}
-      <div className="role-evidence-grid">{(["PM", "DEVELOPER", "QA"] as const).map(role => {
+      <details className="role-reports"><summary>PM·Developer·QA 직원별 상세 보고</summary><div className="role-evidence-grid">{(["PM", "DEVELOPER", "QA"] as const).map(role => {
         const entries = latest.checkpoint.roles.filter(entry => entry.role === role);
         return <article className="role-evidence" key={role}><h3>{role === "DEVELOPER" ? "Developer" : role}</h3>{entries.length ? entries.map(entry => <RoleResult key={`${entry.threadId}:${entry.turnId}`} evidence={entry} />) : <p className="muted small">완료된 결과 없음</p>}</article>;
-      })}</div>
+      })}</div></details>
       {workspace && <div className="candidate-evidence"><h3>코드 변경 근거</h3><p className="run-sha">후보 SHA <code>{workspace.sha}</code></p><p className="small">Developer 제출 파일: {latest.checkpoint.roles.filter(role => role.role === "DEVELOPER").at(-1)?.output.files.map(file => file.path).join(", ") || "기록 없음"}</p><details><summary>후보 diff 확인</summary><pre className="evidence-output">{workspace.diff || "diff 없음"}</pre></details></div>}
       {verification && <div className="verification-evidence"><h3>실제 실행 검증</h3><p className="run-sha">검증 SHA <code>{verification.sha}</code> · {formatTime(verification.verifiedAt)} KST</p><div className="verification-grid">{(["test", "build"] as const).map(kind => <details key={kind} open={verification[kind].exitCode !== 0}><summary>{kind === "test" ? "테스트" : "빌드"} 종료 코드: {verification[kind].exitCode}</summary><pre className="evidence-output">{verification[kind].output || "출력 없음"}</pre></details>)}</div><p className="muted small">네트워크 차단: {verification.sandbox.networkDisabled ? "검증됨" : "미검증"} · 루트 읽기 전용: {verification.sandbox.readOnlyRoot ? "검증됨" : "미검증"} · 자원 제한: {verification.sandbox.resourceLimited ? "검증됨" : "미검증"}</p></div>}
       <p className="usage-evidence">구독 사용 기록 · 입력 {latest.checkpoint.usage.inputTokens.toLocaleString("ko-KR")} / 캐시 입력 {latest.checkpoint.usage.cachedInputTokens.toLocaleString("ko-KR")} / 출력 {latest.checkpoint.usage.outputTokens.toLocaleString("ko-KR")} 토큰 · 모델 호출 {latest.checkpoint.turns}회 · 재작업 {latest.checkpoint.rework}회<br /><span className="muted">토큰 수를 API 요금으로 환산하지 않습니다.</span></p>
@@ -532,6 +548,8 @@ function TaskDetailPanel({ task, onError, onClose }: { task: Task; onError: (err
   const shown = detail ?? task;
   return <section className="panel detail-panel" aria-labelledby="task-detail-title"><div className="section-heading"><div><span className="eyebrow">TASK DETAIL</span><h2 id="task-detail-title">{shown.title}</h2></div><button type="button" className="text-button" onClick={onClose}>상세 닫기</button></div>
     <div className="detail-meta"><span className="status-badge">{shown.statusLabelKo}</span><span>버전 {shown.version}</span><span>최종 변경 · {formatTime(shown.updatedAt)} KST</span></div>
-    <div className="detail-grid"><div><h3>한국어 요청 원문</h3><p className="original-command">{shown.commandOriginalKo}</p><h3>수용 기준</h3><ul className="criteria-list">{shown.acceptanceCriteria.map(criterion => <li key={criterion.id}><code>{criterion.id}</code><span>{criterion.descriptionKo}</span></li>)}</ul></div><div><h3>업무 상태 이력</h3>{failed ? <p role="status" className="muted">이력을 불러오지 못했습니다. 업무를 다시 선택해 주세요.</p> : !detail ? <p role="status" className="muted">이력을 불러오는 중입니다…</p> : detail.events.length === 0 ? <p className="muted">서버에 기록된 상태 이력이 없습니다.</p> : <ol className="history-list">{detail.events.map(entry => <li key={entry.eventId}><strong>{eventLabels[entry.type] ?? entry.type}</strong><span><time dateTime={entry.timestamp}>{formatTime(entry.timestamp)} KST</time> · #{entry.sequence}</span></li>)}</ol>}</div></div>
+    <details className="task-request-history"><summary>요청 원문·수용 기준·상태 이력 확인</summary>
+      <div className="detail-grid"><div><h3>한국어 요청 원문</h3><p className="original-command">{shown.commandOriginalKo}</p><h3>수용 기준</h3><ul className="criteria-list">{shown.acceptanceCriteria.map(criterion => <li key={criterion.id}><code>{criterion.id}</code><span>{criterion.descriptionKo}</span></li>)}</ul></div><div><h3>업무 상태 이력</h3>{failed ? <p role="status" className="muted">이력을 불러오지 못했습니다. 업무를 다시 선택해 주세요.</p> : !detail ? <p role="status" className="muted">이력을 불러오는 중입니다…</p> : detail.events.length === 0 ? <p className="muted">서버에 기록된 상태 이력이 없습니다.</p> : <ol className="history-list">{detail.events.map(entry => <li key={entry.eventId}><strong>{eventLabels[entry.type] ?? entry.type}</strong><span><time dateTime={entry.timestamp}>{formatTime(entry.timestamp)} KST</time> · #{entry.sequence}</span></li>)}</ol>}</div></div>
+    </details>
   </section>;
 }

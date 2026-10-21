@@ -18,6 +18,10 @@ export function parseSlackCommand(text: unknown): SlackCommand {
 export type SlackReceipt = { id: string; connection_id: string; connection_version: number; organization_id: string; project_id: string;
   payload: { actorId: string; userId: string; command: SlackCommand }; result: { text: string; taskId?: string } | null };
 type Dependencies = { connection: (id: string) => Promise<Connection>; credential: (connection: Connection, field: string) => Promise<string>; fetcher: typeof fetch };
+export function slackDashboardLink(projectId: string, taskId?: string) {
+  const query = new URLSearchParams({ project: projectId }); if (taskId) query.set('task', taskId);
+  return `<http://127.0.0.1:3000/?${query}#task-inspector|대시보드 우측 상세 열기 (이 PC)>`;
+}
 export class SlackCommands {
   constructor(private database: Database, private deps: Dependencies) {}
   private async authorized(receipt: SlackReceipt, expectedReplyStatus?: string) {
@@ -49,11 +53,11 @@ export class SlackCommands {
           title: Array.from((original.split(/\r?\n/).find(line => line.trim()) ?? '').trim()).slice(0, 100).join(''), commandOriginalKo: original, source: 'SLACK',
           acceptanceCriteria: [{ id: 'AC-1', descriptionKo: '업무 원문에 따른 결과와 검증 근거를 Owner가 확인한다.', method: 'manual', required: true }],
         });
-        result = { taskId: task.id, text: `업무를 등록했습니다.\n업무 ID: ${task.id}\n상태: 할 일\n자동 실행·결과 수락·merge는 시작하지 않았습니다. 수용 기준을 웹에서 검토해 주세요.` };
+        result = { taskId: task.id, text: `업무를 등록했습니다.\n상태: 할 일 · 실행 전\n${slackDashboardLink(receipt.project_id, task.id)}\n열면 요청 원문·수용 기준·직원 보고·검증 결과·확인된 커밋을 볼 수 있습니다.\n다음: 수용 기준을 검토하고 웹에서 실행을 요청하세요. 자동 실행·수락·merge는 하지 않습니다.\n업무 ID: ${task.id}` };
       } else if (command.kind === 'STATUS') {
         const counts = await tx<{ status: TaskStatus; count: number }[]>`select status,count(*)::int as count from tasks where organization_id=${receipt.organization_id} and project_id=${receipt.project_id} group by status order by status`;
-        result = { text: `프로젝트 ${receipt.project_id}\n${counts.map(row => `${taskLabels[row.status]}: ${row.count}`).join('\n') || '등록된 업무 없음'}\n서버 기록 기준입니다. merge 승인은 웹에서 별도로 확인해 주세요.` };
-      } else result = { text: '/ai-pixel 상태 — 서버 업무 상태 조회\n/ai-pixel 업무 <원문> — 할 일 등록 (자동 실행 없음)\n/ai-pixel 도움말 — 명령 안내\n실행·결과 수락·merge 승인은 웹 대시보드에서 진행합니다.' };
+        result = { text: `서버에 기록된 업무 현황\n${counts.map(row => `${taskLabels[row.status]}: ${row.count}`).join('\n') || '등록된 업무 없음'}\n${slackDashboardLink(receipt.project_id)}\n업무를 선택하면 우측에서 변경 요약·테스트·QA·확인된 커밋을 볼 수 있습니다. merge 승인은 별도입니다.` };
+      } else result = { text: `/ai-pixel 상태 — 서버 업무 상태 조회\n/ai-pixel 업무 <원문> — 할 일 등록 (자동 실행 없음)\n/ai-pixel 도움말 — 명령 안내\n${slackDashboardLink(receipt.project_id)}\n프로젝트·업무 선택 → 우측 상세에서 결과·변경 파일·검증·커밋 확인 → 수락 여부 결정. 실행·merge·배포는 자동으로 시작하지 않습니다.` };
       await tx`update integration_inbox set status='PROCESSED',result=${tx.json(result)},reply_status='PENDING',updated_at=now() where id=${receipt.id}`;
       await tx`insert into audit_logs(id,organization_id,project_id,actor_type,actor_id,action,target_type,target_id,request_id,outcome,metadata)
         values(${randomUUID()},${receipt.organization_id},${receipt.project_id},'USER',${receipt.payload.actorId},'slack.command.processed','integration_inbox',${receipt.id},${receipt.id},'SUCCESS',${tx.json({ kind: command.kind, taskId: result.taskId ?? null })})`;

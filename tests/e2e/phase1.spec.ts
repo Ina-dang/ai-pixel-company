@@ -73,6 +73,32 @@ async function loginAndSelect(page: Page) {
   await expect(page.getByRole('heading', { name: 'AI 직원 실행', exact: true })).toBeVisible();
 }
 
+test('right inspector opens a deep-linked verified delivery without triggering workflow actions', async ({ page }) => {
+  const complete = run('WAITING_APPROVAL'), repositoryUrl = 'https://github.com/Ina-dang/how-to-trash.git';
+  complete.fixture = 'how-to-trash-v1';
+  complete.repositorySource = { profile: 'how-to-trash-v1', repositoryUrl, baseSha: 'b'.repeat(40), admissionSha: 'c'.repeat(64), imageId: 'image' };
+  complete.checkpoint.roles = [role('PM'), role('DEVELOPER'), role('QA')];
+  complete.checkpoint.workspace = { sha, diff: '+candidate', files: [{ path: 'src/index.js', content: 'code' }] };
+  complete.checkpoint.verification = { sha, test: { exitCode: 0, output: 'pass' }, build: { exitCode: 0, output: 'pass' }, sandbox: { networkDisabled: true, readOnlyRoot: true, resourceLimited: true }, verifiedAt: now };
+  complete.checkpoint.delivery = { repositoryUrl, commitSha: '7'.repeat(40), branch: 'codex/region-search', candidateSha: sha, files: ['src/lib/regions.ts'], verifiedAt: now };
+  const state = await mockWorkflow(page, complete, true, repositoryUrl);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(`/?project=${projectId}&task=${taskId}#task-inspector`);
+  const inspector = page.getByRole('complementary', { name: '프로젝트와 업무 상세', exact: true });
+  await expect(inspector.getByRole('heading', { name: '결과 한눈에 보기' })).toBeVisible();
+  const summary = inspector.getByRole('region', { name: '선택 업무 결과 요약' });
+  await expect(summary.getByText('PASS · 동일 후보', { exact: true })).toBeVisible();
+  await expect(summary.getByRole('link', { name: /변경 커밋/ })).toHaveAttribute('href', `https://github.com/Ina-dang/how-to-trash/commit/${'7'.repeat(40)}`);
+  await expect(summary.getByRole('link', { name: /src\/lib\/regions.ts/ })).toHaveAttribute('href', `https://github.com/Ina-dang/how-to-trash/blob/${'7'.repeat(40)}/src/lib/regions.ts`);
+  const left = await page.locator('.workspace-content').boundingBox(), right = await inspector.boundingBox();
+  expect(left && right && right.x >= left.x + left.width).toBeTruthy();
+  await page.reload(); await expect(summary).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(summary.getByRole('link', { name: /변경 커밋/ })).toBeVisible();
+  expect(state.requests).toEqual([]);
+});
+
 test('selected real repository uses its bounded profile instead of the arithmetic fixture', async ({ page }) => {
   const state = await mockWorkflow(page, null, true, 'https://github.com/Ina-dang/how-to-trash.git');
   await loginAndSelect(page);

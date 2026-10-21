@@ -32,6 +32,7 @@ export interface RoleOutput {
 export interface Usage { inputTokens: number; cachedInputTokens: number; outputTokens: number }
 export interface RoleEvidence { role: Role; threadId: string; turnId: string | null; output: RoleOutput; usage: Usage; candidateSha: string | null; completedAt: string }
 export interface Checkpoint {
+  delivery?: { repositoryUrl: string; branch: string; commitSha: string; candidateSha: string; files: string[]; verifiedAt: string };
   verificationWindow?: { approvedAt: string; deadlineAt: string; qaAttemptsRemaining: number; candidateSha: string };
   stage: Stage;
   rework: number;

@@ -52,7 +52,7 @@ async function officeEvent(page: Page, type: string, data: unknown, sequence: st
 }
 
 async function loginOffice(page: Page) {
-  await page.goto('/');
+  await page.goto(`/?project=${projectId}`);
   await expect(page.getByRole('region', { name: '픽셀 사무실', exact: true }).getByRole('heading', { name: /^픽셀 사무실/ })).toBeVisible();
 }
 
@@ -114,6 +114,7 @@ async function mockOffice(page: Page, agents: OfficeAgent[]) {
     }
     if (path === `/projects/${secondProjectId}/snapshot`) return fulfill(state.second);
     if (path === `/tasks/${taskId}`) return fulfill({ ...task, events: [] });
+    if (path === `/tasks/${taskId}/runs`) return fulfill({ items: [] });
     if (path === `/tasks/${taskId}/runs`) return fulfill({ items: [] });
     return route.continue();
   });

@@ -93,6 +93,7 @@ export type WorkflowRun = {
   createdAt: string;
   updatedAt: string;
   checkpoint: {
+    delivery?: { repositoryUrl: string; branch: string; commitSha: string; candidateSha: string; files: string[]; verifiedAt: string };
     stage: "PM" | "DEVELOPER" | "VERIFY" | "QA";
     rework: number;
     turns: number;

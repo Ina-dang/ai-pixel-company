@@ -186,6 +186,14 @@
 - 2026-10-21 검증 후속: Owner가 추가5분·QA1회를 승인했다. 같은 후보 `ae2afa1c…`에서 test6·lint/tsc/build·브라우저4조건과 QA PASS를 확인했다. 창 승인08:18:11.543→관측완료08:20:06.790 KST, 115.247초≤300초다. 원래 startedAt·rework2·사용량을 보존했고 총turn6·추가QA잔여0이다. target `codex/region-search` commit `7b07edc`를 push했으며 DB는 WAITING_APPROVAL로 남겼다. 별도 앱 결과 수락·merge·운영 배포는 수행하지 않았다. 최초 FAIL 이력과 404 baseline 한계도 유지한다.
 - 한계: 단일 승인 저장소/기준 commit/Next.js npm 잠금 파일·정해진 경로에 한정된다. GitHub App의 대상 저장소 권한/CI/merge 범위를 확장하지 않았다. 범용 저장소·언어 비교·운영 C·실제 merge/운영 배포는 여전히 별도다.
 
+## ADR-020 — 결과 상세 패널과 검증된 전달 기록 (2026-10-21)
+
+- 배경: 커밋 SHA·서버 ID 중심 보고와 아래쪽 상세 때문에 사용자가 실제 결과를 찾기 어려웠다.
+- 결정: 선택 프로젝트·업무의 요약·검증·변경 파일·전달 링크를 우측에 표시한다. 모바일은 상단, 긴 직원 보고·원문·이력은 접어서 표시한다. 링크는 승인 action을 실행하지 않는다.
+- 전달 신뢰 경계: 로컬 운영자 CLI가 고정 저장소/profile·QA PASS·후보 SHA·허용 경로·원격 head와 Git 파일 내용을 확인한다. 일치할 때만 checkpoint.delivery와 감사 이력을 저장한다. 기존 기록의 다른 commit 덮어쓰기는 거부하며 원본 결과 상태는 유지한다.
+- URL 경계: 검증된 GitHub 저장소·commit·branch만 링크한다. 후보 SHA를 Git SHA로 추측하지 않는다. URL의 project/task는 로그인 뒤 실제 접근 가능한 목록에서만 선택한다. 이름 기반 검증 프로젝트 묶음·localStorage 선택 기억은 UI 선호이며 권한 정책이 아니다.
+- 검증: 관련62개·전체 Chromium48개와 실제 how-to-trash 전달/화면 대조를 통과했다. 최초39PASS/9FAIL은 보존한다. 실제 run은 WAITING_APPROVAL·turn6 유지이며 새 모델 호출·Slack 시험 전송·수락·merge·운영 배포는 없다.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

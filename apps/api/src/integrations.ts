@@ -252,7 +252,7 @@ export class IntegrationService {
           await emit(tx, { organizationId: connection.organization_id, projectId: connection.project_id, type: 'integration.webhook.received', aggregateVersion: connection.version, payload: { provider, eventType, deliveryId: delivery } });
           return { duplicate: false };
         });
-        if (provider === 'SLACK') return c.json({ received: true, ...result, response_type: 'ephemeral', text: '명령을 접수했습니다. 처리 결과는 지정 채널과 웹 연결 기록에 표시됩니다. 실행·merge는 자동으로 시작하지 않습니다.' }, 200);
+        if (provider === 'SLACK') return c.json({ received: true, ...result, response_type: 'ephemeral', text: '접수했습니다. 이 PC의 http://127.0.0.1:3000 대시보드에서 프로젝트와 업무를 선택하면 우측 상세에 결과·검증·확인된 커밋이 표시됩니다. 채널에는 처리 결과를 별도로 알립니다. 실행·merge는 자동으로 시작하지 않습니다.' }, 200);
         return c.json({ received: true, ...result }, 202);
       } catch (error) { convert(error); }
     });

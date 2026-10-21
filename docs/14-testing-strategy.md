@@ -1,5 +1,17 @@
 # 테스트·품질·에이전트 평가
 
+## 결과 상세·전달 근거 후속 — 2026-10-21
+
+실행 20 + 연동 32 + 전달/링크 10 = 관련 62개를 통과했다.
+원격 head·파일 내용·허용 경로·QA/SHA 불일치·다른 저장소·더러운 checkout은 전달 기록 전에 거부한다.
+실제 how-to-trash의 push된 `7b07edc`와 전체 후보를 대조한 기록을 checkpoint·감사 이력에 연결했다.
+전체 Chromium 48개는 우측 배치·딥링크/새로고침·모바일·기존 승인 경계를 포함한다.
+첫 전체 실행은 39개 PASS·9개 FAIL이었다. 기본 프로젝트 선택 변화와 숨겨진 기준 정보를 수정하고 최종 소스에서 48개 완주했다.
+첫 실패의 화면·오류는 Git 제외 `.local/browser-evidence/result-panel-first-failure`에 보존했다.
+실제 결과 패널의 커밋 링크·6파일·QA PASS·WAITING_APPROVAL·모델 호출6회 유지, 업무 변경0·페이지 오류0을 확인했다.
+`scripts/verify-result-panel.ts`는 읽기 전용 실제 UI 검사이며 데스크톱/모바일 화면을 `.local/browser-evidence/result-inspector-*.png`에 저장한다.
+이 시범은 새로운 모델 실행·Slack 전송·결과 수락·merge·운영 배포를 포함하지 않는다.
+
 ## 실제 저장소 1차 검증 — 2026-10-20
 
 how-to-trash는 기준 commit `e98a537cada650e64a29b5e25c5cf6e94f5ced0f`의 원래 빌드0/미구현 helper 시험 실패를 먼저 확인했다. 실제 Developer 후보에는 고정 외부 수용 검사와 Developer가 추가한 node:test를 별도로 실행했다. artifact의 같은 SHA에 테스트/build0, lint/tsc를 연결하며 UI·모델이 최종 상태를 결정하지 않는다. QA가 브라우저와 개별 명령 근거 부족을 FAIL로 남긴 뒤, 이를 보완하는 과정에서 원래15분 제한이 끝났다. 기존 token/turn/rework/startedAt·이전 FAIL은 보존한다.

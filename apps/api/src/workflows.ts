@@ -12,6 +12,7 @@ const usageSchema = z.object({ inputTokens: z.number().int().nonnegative(), cach
 const fileSchema = z.object({ path: z.string().max(256), content: z.string().max(300_000) });
 const shaSchema = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
 export const checkpointSchema = z.object({
+  delivery: z.object({ repositoryUrl: z.url().regex(/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/), branch: z.string().min(1).max(200), commitSha: z.string().regex(/^[a-f0-9]{40}$/), candidateSha: shaSchema, files: z.array(z.string().min(1).max(256)).min(1).max(64), verifiedAt: z.iso.datetime() }).optional(),
   verificationWindow: z.object({ approvedAt: z.iso.datetime(), deadlineAt: z.iso.datetime(), qaAttemptsRemaining: z.number().int().min(0).max(1), candidateSha: shaSchema }).optional(),
   stage: z.enum(['PM', 'DEVELOPER', 'VERIFY', 'QA']), rework: z.number().int().min(0).max(2), turns: z.number().int().min(0).max(20), usage: usageSchema,
   roles: z.array(z.object({ role: z.enum(['PM', 'DEVELOPER', 'QA']), threadId: z.string().min(1), turnId: z.string().min(1).nullable(),
