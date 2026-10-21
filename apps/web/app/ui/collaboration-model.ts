@@ -10,7 +10,8 @@ export type Employee = { id: string; organizationId: string; nameKo: string; rol
   currentProfileVersion: number; profile: StaffProfile; createdAt: string; updatedAt: string;
   profiles?: StaffProfile[]; employmentHistory?: { id: string; fromStatus: string | null; toStatus: string; createdAt: string }[] };
 export type StaffAssignment = { role: StaffRole; employeeId: string; employeeNameKo: string; profileVersion: number; version: number; employmentStatus: EmploymentStatus };
-export type IntegrationConnection = { id: string | null; provider: 'GITHUB' | 'SLACK'; configured: boolean; webhookConfigured?: boolean; enabled: boolean; version: number; publicConfig: Record<string, unknown> | null; reason: string | null };
+export type IntegrationConnection = { id: string | null; provider: 'GITHUB' | 'SLACK'; configured: boolean; webhookConfigured?: boolean; enabled: boolean; version: number; publicConfig: Record<string, unknown> | null; reason: string | null;
+  receiver?: { state: 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'STOPPED' | 'ERROR'; connectedAt: string | null; lastReceivedAt: string | null; reconnects: number; errorCode: string | null } | null };
 export type IntegrationOperation = { id: string; provider: 'GITHUB' | 'SLACK'; kind: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'DEFERRED';
   runId: string | null; candidateSha: string | null; errorCode: string | null; externalRef: unknown; attempts: number; createdAt: string; updatedAt: string };
 export type MergeRequest = { id: string; operationId: string; runId: string; scopeHash: string; version: number; status: string; expiresAt: string; approvedBy: string | null; approvedAt: string | null; errorCode: string | null; result: unknown;

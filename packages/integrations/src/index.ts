@@ -55,7 +55,7 @@ export class LocalSecretStore {
 }
 
 export type GitHubConfig = { appId: string; installationId: number; repositoryId: number; owner: string; repo: string; baseBranch: string; requiredChecks: string[]; policyVersion: string; protectionRead?: boolean };
-export type SlackConfig = { teamId: string; channelId: string; userMappings: Record<string, string> };
+export type SlackConfig = { teamId: string; channelId: string; userMappings: Record<string, string>; mode?: 'HTTP' | 'SOCKET'; appId?: string };
 export function githubConfig(value: unknown): GitHubConfig {
   const c = value as GitHubConfig;
   if (!c || !Object.keys(c).every(key => ['appId','installationId','repositoryId','owner','repo','baseBranch','requiredChecks','policyVersion','protectionRead'].includes(key)) || (c.protectionRead !== undefined && typeof c.protectionRead !== 'boolean') || !/^\d+$/.test(c.appId) || !Number.isSafeInteger(c.installationId) || c.installationId < 1 || !Number.isSafeInteger(c.repositoryId) || c.repositoryId < 1
@@ -66,7 +66,8 @@ export function githubConfig(value: unknown): GitHubConfig {
 }
 export function slackConfig(value: unknown): SlackConfig {
   const c = value as SlackConfig;
-  if (!c || !Object.keys(c).every(key => ['teamId','channelId','userMappings'].includes(key)) || !/^T[A-Z0-9]{2,30}$/.test(c.teamId) || !/^[CG][A-Z0-9]{2,30}$/.test(c.channelId) || !c.userMappings || typeof c.userMappings !== 'object'
+  if (!c || !Object.keys(c).every(key => ['teamId','channelId','userMappings','mode','appId'].includes(key)) || !/^T[A-Z0-9]{2,30}$/.test(c.teamId) || !/^[CG][A-Z0-9]{2,30}$/.test(c.channelId) || !c.userMappings || typeof c.userMappings !== 'object'
+    || (c.mode !== undefined && !['HTTP', 'SOCKET'].includes(c.mode)) || (c.mode === 'SOCKET' && !/^A[A-Z0-9]{2,30}$/.test(c.appId ?? '')) || (c.appId !== undefined && !/^A[A-Z0-9]{2,30}$/.test(c.appId))
     || !Object.entries(c.userMappings).every(([user, member]) => /^[UW][A-Z0-9]{2,30}$/.test(user) && /^[0-9a-f-]{36}$/i.test(member))) throw new IntegrationError('CONFIGURATION_INVALID', 409);
   return c;
 }
@@ -83,7 +84,7 @@ export function assertCandidateManifest(files: Array<{ path: string; content: st
   const canonical = files.map(file => ({ path: file.path, content: file.content })).sort((a, b) => a.path.localeCompare(b.path, 'en'));
   if (hash(JSON.stringify(canonical)) !== candidateSha) throw new IntegrationError('CANDIDATE_MANIFEST_CHANGED', 409);
 }
-export function containsSecret(text: string) { return /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?:gh[opusr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})\b/.test(text); }
+export function containsSecret(text: string) { return /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?:gh[opusr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})\b/.test(text); }
 export function safeText(value: string, maximum = 6000) {
   if (typeof value !== 'string' || !value.trim() || value.length > maximum || containsSecret(value)) throw new IntegrationError('TEXT_DENIED');
   return value.replace(/<@[A-Z0-9]+>|<![^>]+>/g, '[mention]');

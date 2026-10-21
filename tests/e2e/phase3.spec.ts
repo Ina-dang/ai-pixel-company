@@ -66,7 +66,8 @@ function mergeRequest(): MergeRequest {
 async function mockCollaboration(page: Page, configured = false) {
   const state = { employees: [] as Employee[], profiles: [] as Employee['profile'][], assignments: [] as StaffAssignment[], operations: [] as IntegrationOperation[],
     requests: [] as { path: string; method: string; body: Record<string, unknown>; csrf?: string; key?: string }[], rejectOperation: false, rejectAssignment: false,
-    mergeRequests: [] as MergeRequest[], commands: [] as SlackCommandReceipt[], mergeBlockers: [] as string[], rejectMerge: false };
+    mergeRequests: [] as MergeRequest[], commands: [] as SlackCommandReceipt[], mergeBlockers: [] as string[], rejectMerge: false,
+    socket: null as NonNullable<Integrations['connections'][number]['receiver']> | null };
   await page.route('**/api/v1/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname.replace('/api/v1', '');
     const fulfill = (data: unknown, pagination?: unknown) => route.fulfill({ json: { data, ...(pagination ? { pagination } : {}) } });
@@ -81,7 +82,7 @@ async function mockCollaboration(page: Page, configured = false) {
       if (path === `/projects/${projectId}/integrations`) {
         const data: Integrations = { connections: [{ id: 'github', provider: 'GITHUB', configured, enabled: configured, version: 1,
           publicConfig: configured ? { repository: 'Ina-dang/fixture', baseBranch: 'main', installationId: 123, policyVersion: 1 } : {}, reason: configured ? null : 'CREDENTIAL_UNCONFIGURED' },
-        { id: 'slack', provider: 'SLACK', configured: false, enabled: false, version: 1, publicConfig: {}, reason: 'CREDENTIAL_UNCONFIGURED' }], operations: state.operations, mergeRequests: state.mergeRequests, commands: state.commands,
+        { id: 'slack', provider: 'SLACK', configured: !!state.socket, enabled: !!state.socket, version: 1, publicConfig: state.socket ? { mode: 'SOCKET', teamId: 'T123', channelId: 'C123', mappedUsers: 1 } : {}, receiver: state.socket, reason: state.socket ? null : 'CREDENTIAL_UNCONFIGURED' }], operations: state.operations, mergeRequests: state.mergeRequests, commands: state.commands,
         setup: { githubEnv: ['GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'], slackEnv: ['SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET'] } };
         return fulfill(data);
       }
@@ -169,6 +170,18 @@ test('Kanban reflects all server states and keyboard cards open gated task detai
   await expect(area.getByRole('tab', { name: '직원·배정', exact: true })).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('Socket receiver shows actual connection state and local-PC limits without implying a new permission', async ({ page }) => {
+  const state = await mockCollaboration(page);
+  state.socket = { state: 'CONNECTED', connectedAt: now, lastReceivedAt: now, reconnects: 1, errorCode: null };
+  await openCollaboration(page, '연동 현황');
+  const receiver = page.getByRole('region', { name: 'Slack 연결', exact: true }).getByRole('status');
+  await expect(receiver).toContainText('Slack 명령 수신 중'); await expect(receiver).toContainText('공개 주소와 임시 터널 없이');
+  await expect(receiver).toContainText('로컬 API가 실행 중'); await expect(receiver).toContainText('마지막 명령 접수');
+  state.socket.state = 'RECONNECTING'; await page.reload(); await openCollaboration(page, '연동 현황');
+  await expect(receiver).toContainText('Slack 연결 끊김 · 재연결 중'); expect(state.requests).toEqual([]);
+  await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('hire and assign Developer; profile updates retain prior immutable versions', async ({ page }) => {

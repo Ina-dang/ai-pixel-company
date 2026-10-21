@@ -214,7 +214,13 @@ function IntegrationPanel({ projectId, tasks, data, session, refreshKey, onRefre
         <div className="integration-provider"><span aria-hidden="true">{provider === 'GITHUB' ? 'GH' : 'S'}</span><h4>{provider === 'GITHUB' ? 'GitHub App' : 'Slack App'}</h4><span className="status-badge">{connected ? '서버 설정 확인됨' : current?.reason === 'DISABLED' ? '비활성' : '미설정'}</span></div>
         <p>{connected ? '연동 설정이 있습니다. 개별 작업의 원격 결과와 승인 범위는 별도로 확인합니다.' : provider === 'GITHUB' ? 'GitHub App 설치와 저장소 범위, 서버 자격 증명 설정이 필요합니다.' : 'Slack App 설치와 workspace·channel 범위, 서버 자격 증명 설정이 필요합니다.'}</p>
         {current?.configured && current.publicConfig && <ConnectionScope provider={provider} config={current.publicConfig} />}
-        {connected && <p className="muted small">웹훅 서명 키: {current?.webhookConfigured ? '설정됨 · 원격 수신은 별도 검증 필요' : '미설정 · 외부 작업 발행만 가능'}</p>}
+        {provider === 'SLACK' && current?.receiver ? <section aria-label="Slack 명령 수신" className="collaboration-note" role="status">
+          <strong>{({ CONNECTING: 'Slack 명령 연결 중', CONNECTED: 'Slack 명령 수신 중', RECONNECTING: 'Slack 연결 끊김 · 재연결 중', STOPPED: 'Slack 명령 수신 중지', ERROR: 'Slack 연결 확인 필요' })[current.receiver.state]}</strong>
+          <p>Socket Mode · 공개 주소와 임시 터널 없이 이 PC에서 받습니다. PC가 깨어 있고 로컬 API가 실행 중이어야 합니다.</p>
+          {current.receiver.connectedAt && <p className="muted small">마지막 연결 · {formatTime(current.receiver.connectedAt)} KST</p>}
+          {current.receiver.lastReceivedAt && <p className="muted small">마지막 명령 접수 · {formatTime(current.receiver.lastReceivedAt)} KST</p>}
+          {current.receiver.errorCode && <p className="muted small">수신 상태 코드: <code>{current.receiver.errorCode}</code></p>}
+        </section> : connected && <p className="muted small">웹훅 서명 키: {current?.webhookConfigured ? '설정됨 · 원격 수신은 별도 검증 필요' : '미설정 · 외부 작업 발행만 가능'}</p>}
         {current?.reason && <p className="muted small">상태 코드: <code>{current.reason}</code></p>}
         <details><summary>설정 확인 경로</summary>
           <p>{provider === 'GITHUB' ? '전용 GitHub App을 만들고, 작업할 저장소에 설치하는 순서예요.' : '전용 Slack App을 만들고, 보고받을 workspace와 채널에 연결하는 순서예요.'}</p>

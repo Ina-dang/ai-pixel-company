@@ -1,5 +1,35 @@
 # Slack 협업과 사용자 보고
 
+## Socket Mode 로컬 수신
+
+2026-10-21 현재 로컬 명령 연결은 `SOCKET` 모드를 사용한다. 아래 HTTP Request URL·터널 시험 기록은 이전 검증 이력이다. [Slack 공식 문서](https://docs.slack.dev/apis/events-api/using-socket-mode/)(열람 2026-10-21, 변경일 미공개)에 따라 공식 `@slack/socket-mode@3.1.0` SDK와 앱 수준 `connections:write` 토큰으로 외부 발신 WebSocket 연결을 연다. 신규 유료 서비스·유료 API·모델 호출은 사용하지 않았다.
+
+### 로컬 설정과 실행 조건
+
+- Owner가 Slack 설정에서 Socket Mode를 켜고 앱 수준 토큰을 생성한다. 값은 Git 제외 `.local/integration-secrets/slack-app.txt`에 한 줄로 저장하며 채팅·로그에 출력하지 않는다.
+- `.local/integrations.json`의 명령용 Slack 연결에 `config.mode: "SOCKET"`, `config.appId`, 기존 team/channel/userMappings와 `secretRefs.appToken: "file:slack-app.txt"`, `secretRefs.botToken`을 지정한다. 기존 how-to-trash 발신 전용 연결의 사용자 매핑은 비워 둔다. 같은 앱 ID의 Socket 수신 연결을 중복 구성하지 않는다.
+- `pnpm dev` 또는 로컬 API 서버를 실행해야 수신한다. PC 절전·종료·네트워크 단절 중 수신 가용성을 보장하지 않는다. SDK로 연결하고 애플리케이션이 재연결 Promise를 처리한다. 연결 후 단절은 1·2·4·8·16·최대30초 간격으로 재시도하며 API를 다시 시작하면 저장된 설정으로 연결한다. Windows 부팅/로그인 자동 실행은 등록하지 않았다. 최초 시작 실패의 안전한 오류 코드를 확인한 뒤 원인을 고치고 API를 재시작한다.
+- 대시보드 → 명령 프로젝트 → 연동 현황의 ‘Slack 명령 수신 중/재연결 중/수신 중지/연결 확인 필요’와 마지막 연결·수신 시각으로 상태를 확인한다. 발신 연결의 설정 완료와 수신 중 상태는 별개다.
+
+### 수신 경계
+
+Slack 앱 ID·팀·채널·Owner 매핑·현재 멤버십·조직/프로젝트 활성 상태·연결 버전을 검사한다. HTTP 모드의 원문 서명 검증과 구분하며, Socket 연결에는 HTTP 수신을 허용하지 않는다. 명령은 기존 `/ai-pixel` 도움말·상태·업무 등록만 처리한다. 업무 등록은 TODO를 만들고 실행·수락·merge·배포를 시작하지 않는다.
+
+inbox 영속화 후에만 ACK하고 DB 오류 시 ACK하지 않아 재전달을 받을 수 있다. Slack trigger ID를 중복 기준으로 사용해 envelope ID가 바뀐 재시도도 한 번만 처리한다. response_url·기존 token·WebSocket URL은 inbox에 보관하지 않는다. 과도한 동시 수신은 로컬 무제한 큐를 만들지 않고 ACK를 보류한다. 비활성/버전 변경/보관/유지보수 상태면 연결을 중단한다.
+
+### 실제 검증 근거
+
+`내손비` 비공개 `#ai-pixel-test`, 기존 Owner 매핑·시험 프로젝트 한 개에서 상태 조회·업무 등록·API 재시작 후 상태 조회·오류 수정 후 상태 조회를 실제 Slack UI로 전송했다. 네 inbox 모두 transport=SOCKET·PROCESSED·reply=SENT였다. 업무 `9536ff1c-6d44-42d3-92a3-c28ad0baf8c5` 한 개만 TODO·source=SLACK으로 생성됐으며 한국어 원문·공백 두 칸·SHA256을 보존했다. baseline 대비 모델 실행 증가0·merge 상태 변경0·외부 작업 변경0이다.
+
+- [실제 업무 등록 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792545637706829), [API 재시작 후 상태 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792545678514979).
+- `scripts/verify-slack-commands.ts baseline|verify|verify-restart|verify-recovery SOCKET`: 실제 DB 대조, Git 제외 `.local/slack-socket-commands-live.json`에 근거 저장. HTTP 시험 파일과 분리한다.
+- `scripts/phase3-slack-smoke.ts <projectId> <taskId> --socket`: 실제 API·데스크톱/390px 모바일에서 연결 상태·처리 기록·업무 상세·원문 hash·실행0 확인. 페이지 오류0·업무 쓰기0·가로 넘침 없음. `.local/browser-evidence/slack-socket-desktop.png`, `slack-socket-mobile.png`를 저장했다. 재시작 후 같은 업무를 포함한 복수 보고 때문에 최초 단일 locator 검사가 실패했으며 모든 일치 보고의 표시 검사로 수정 후 통과했다.
+- 최초 장시간 확인 중 SDK 3.1.0 자동 재연결의 요청 실패가 처리되지 않은 Promise 거부로 API를 종료했다. 설치된 공식 SDK의 close/retry 구현을 확인하고 SDK 내부 자동 재연결을 끈 뒤 애플리케이션의 catch·대기 간격·중복 타이머 방지·중지 시 취소를 적용했다. 수정 후 실제 API 연결·Slack 상태 응답과 브라우저를 다시 확인했다. [수정 후 실제 상태 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792546417216509).
+- 모의 테스트는 실제 수신과 구분한다. 재연결 요청 거부→대기→복구·타이머 중복/중지, 저장 전 ACK 금지·잘못된 범위·중복·Owner 취소·연결 버전/비활성화를 테스트했다. 실제 네트워크 장기 단절이나 PC 절전 복구는 시험하지 않았다.
+- 최종 회귀 검증: 재연결 수정 후 lint·typecheck·build 통과, 전체 Vitest 23파일/294개 통과(수정 전293개도 통과). Chromium 전체49개(수신 연결/재연결 표시 포함) 통과와 수정 후 실제 화면 smoke 결과를 분리해 기록한다.
+
+공개 터널을 새로 열지 않았으며 로컬 API 연결은 시험 후 유지한다. 실제 merge·운영 배포는 수행하지 않았다.
+
 ## 실제 상태·업무 등록 후속 — 2026-10-21
 
 Owner가 기존 `내손비/#ai-pixel-test`의 상태 조회1회·시험 업무 등록1회와 Slack POST 한 경로만 최대30분 공개하도록 새로 승인했다. 기존 `/ai-pixel` 명령의 Request URL만 임시 변경했으며 새 scope·설치·user mapping은 추가하지 않았다. 대상은 기존 매핑 프로젝트 `56c54d8a-de76-4400-8308-a63b1bd2adaa`이며 how-to-trash의 발신 전용 연결은 그대로다.

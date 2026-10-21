@@ -407,3 +407,43 @@ describe('Phase 3 Slack commands and explicit merge execution', () => {
     expect(calls.filter(call => call.path.endsWith('/merge'))).toHaveLength(1);
   });
 });
+
+async function enableSocket() {
+  await database.sql`update integration_connections set config=config||${database.sql.json({ mode: 'SOCKET', appId: 'A123' })},secret_refs=secret_refs||${database.sql.json({ appToken: 'env:AI_PIXEL_SLACK_APP_TOKEN' })} where id=${slackId}`;
+}
+const socketBody = (changes: Record<string, unknown> = {}) => ({ api_app_id: 'A123', team_id: 'T123', channel_id: 'C123', user_id: 'U123', command: '/ai-pixel', text: '업무 소켓 원문  공백 보존', trigger_id: 'slack-trigger-12345678', response_url: 'https://hooks.slack.com/commands/response-secret', token: 'legacy-verification-secret', ...changes });
+describe('Socket Mode durable intake', () => {
+  test('same Slack trigger retried in another envelope creates one TODO, never a run or a second reply', async () => {
+    await enableSocket(); const first = await service.receiveSocketCommand(slackId, 1, 'envelope-12345678', socketBody());
+    const retry = await service.receiveSocketCommand(slackId, 1, 'envelope-87654321', socketBody()); expect(first.duplicate).toBe(false); expect(retry.duplicate).toBe(true);
+    const rows = await database.sql`select * from integration_inbox where provider='SLACK'`; expect(rows).toHaveLength(1); expect(rows[0].payload.transport).toBe('SOCKET');
+    expect(JSON.stringify(rows)).not.toContain('response-secret'); expect(JSON.stringify(rows)).not.toContain('legacy-verification-secret');
+    await service.processOnce(); await service.processOnce(); expect(await service.processOnce()).toBe(false);
+    const tasks = await database.sql`select * from tasks where source='SLACK'`; expect(tasks).toHaveLength(1); expect(tasks[0]).toMatchObject({ status: 'TODO', command_original_ko: '소켓 원문  공백 보존', project_id: projectId });
+    expect(await database.sql`select id from workflow_runs`).toHaveLength(1); expect(slackMessages).toHaveLength(1);
+    expect((await slackCommand('상태')).status).toBe(409); // Socket mode never accepts the parallel HTTP ingress.
+  });
+  test.each([{ team_id: 'T999' }, { channel_id: 'C999' }, { user_id: 'U999' }, { api_app_id: 'A999' }, { command: '/other' }])('rejects wrong socket scope %j before receipt creation', async changes => {
+    await enableSocket(); await expect(service.receiveSocketCommand(slackId, 1, 'envelope-12345678', socketBody(changes))).rejects.toThrow();
+    expect(await database.sql`select id from integration_inbox`).toHaveLength(0); expect(calls).toHaveLength(0);
+  });
+  test('conflicting retry, revoked Owner and changed connection version fail closed', async () => {
+    await enableSocket(); await service.receiveSocketCommand(slackId, 1, 'envelope-12345678', socketBody());
+    await expect(service.receiveSocketCommand(slackId, 1, 'envelope-87654321', socketBody({ text: '업무 다른 내용' }))).rejects.toThrow('DELIVERY_CONFLICT');
+    await database.sql`update memberships set status='REVOKED' where organization_id=${ORG} and user_id=${USER}`;
+    await expect(service.receiveSocketCommand(slackId, 1, 'envelope-12345678', socketBody())).rejects.toThrow('SLACK_MAPPING_DENIED');
+    await database.sql`update integration_connections set version=2 where id=${slackId}`;
+    await expect(service.receiveSocketCommand(slackId, 1, 'envelope-12345678', socketBody())).rejects.toThrow('SLACK_MAPPING_CHANGED');
+    await service.processOnce(); expect(await database.sql`select id from tasks where source='SLACK'`).toHaveLength(0);
+  });
+  test('receiver lifecycle follows disabled connection and exposes no app token', async () => {
+    await enableSocket(); const previous = process.env.AI_PIXEL_SLACK_APP_TOKEN; const token = `xapp-${'a'.repeat(30)}`; process.env.AI_PIXEL_SLACK_APP_TOKEN = token;
+    const handlers = new Map<string, (value: unknown) => void>(); let stops = 0;
+    const sockets = new IntegrationService(database, process.cwd(), fetcher, () => ({ on: (name, callback) => { handlers.set(name, callback); }, start: async () => { handlers.get('connected')?.(undefined); }, disconnect: async () => { stops += 1; handlers.get('disconnected')?.(undefined); } }));
+    try {
+      await sockets.refreshSocketReceivers(); const connected = await sockets.status(ORG, projectId); expect(connected.connections.find(row => row.provider === 'SLACK')?.receiver?.state).toBe('CONNECTED'); expect(JSON.stringify(connected)).not.toContain(token);
+      await database.sql`update integration_connections set enabled=false,version=version+1 where id=${slackId}`; await sockets.refreshSocketReceivers();
+      expect(stops).toBe(1); expect((await sockets.status(ORG, projectId)).connections.find(row => row.provider === 'SLACK')?.receiver?.state).toBe('STOPPED');
+    } finally { await sockets.stop(); if (previous === undefined) delete process.env.AI_PIXEL_SLACK_APP_TOKEN; else process.env.AI_PIXEL_SLACK_APP_TOKEN = previous; }
+  });
+});

@@ -194,6 +194,14 @@
 - URL 경계: 검증된 GitHub 저장소·commit·branch만 링크한다. 후보 SHA를 Git SHA로 추측하지 않는다. URL의 project/task는 로그인 뒤 실제 접근 가능한 목록에서만 선택한다. 이름 기반 검증 프로젝트 묶음·localStorage 선택 기억은 UI 선호이며 권한 정책이 아니다.
 - 검증: 관련62개·전체 Chromium48개와 실제 how-to-trash 전달/화면 대조를 통과했다. 최초39PASS/9FAIL은 보존한다. 실제 run은 WAITING_APPROVAL·turn6 유지이며 새 모델 호출·Slack 시험 전송·수락·merge·운영 배포는 없다.
 
+## ADR-021 — 공개 터널 없는 Slack 로컬 수신 (2026-10-21)
+
+- 배경: 임시 HTTPS 주소 만료와 반복 설정 없이 이 PC에서 기존 Slack 명령을 수신해야 한다.
+- 결정: 공식 Socket Mode SDK 3.1.0과 `connections:write` 앱 수준 토큰의 Git 제외 로컬 참조를 사용한다. 기존 bot 권한·명령·Owner/시험 채널 범위를 유지하며 HTTP 모드도 보존하되 Socket 연결의 HTTP ingress는 차단한다.
+- 신뢰 경계: 고정 app/team/channel/current Owner·연결 버전·활성 상태를 검증한다. inbox 영속화 뒤 ACK, trigger 기반 중복 방지, 비활성 연결 중단을 적용한다. SDK 로그·자격 값·WebSocket URL은 공개하지 않는다. 업무는 TODO만 등록한다.
+- 실제 근거: Slack 수신4회(상태·업무·API 재시작 뒤 상태·오류 수정 뒤 상태)와 채널 응답4회, 실제 UI 데스크톱/모바일·원문/hash·TODO1·실행0을 대조했다. SDK 내부 자동 재연결의 요청 오류가 API를 종료한 실패를 보존하고 앱에서 Promise를 처리하는 재연결로 수정했다. 자세한 근거는 docs/11을 따른다. 새 공개 터널·유료 서비스·모델 호출·merge·운영 배포는 없다.
+- 한계: PC/로컬 API 가동과 인터넷 연결이 필요하다. OS 시작 등록·장기 단절·절전 복구 검증은 포함하지 않는다. HTTP 임시 터널 근거는 과거 이력으로 남긴다.
+
 ## 변경 규칙
 
 기존 결정을 바꾸면 ID를 조용히 덮어쓰지 않고 변경 이유·새 ADR·대체 관계를 기록한다. 기술 기능 사실·사용자 지정 요구·실험 결과·설계 가정을 구분한다. 원문 26장의 날짜/대상/배경/대안/선택/근거/영향/한계/상태를 유지한다.

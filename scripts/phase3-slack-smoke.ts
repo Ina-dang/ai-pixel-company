@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 
 // Read-only verification of an already received Slack command. Never posts to Slack or starts work.
 const [projectId, taskId] = process.argv.slice(2);
+const socket = process.argv.includes('--socket');
 assert(projectId && taskId && /^[a-f0-9-]{36}$/.test(projectId) && /^[a-f0-9-]{36}$/.test(taskId));
 process.env.PLAYWRIGHT_BROWSERS_PATH = resolve('.local/playwright');
 const { chromium, expect } = await import('@playwright/test');
@@ -25,16 +26,23 @@ try {
   await expect(page.getByRole('heading', { name: task.title, exact: true })).toBeVisible();
   await area.getByRole('tab', { name: '연동 현황', exact: true }).click();
   const integrationResponse = await page.request.get(`/api/v1/projects/${projectId}/integrations`); assert(integrationResponse.ok()); const integrations = (await integrationResponse.json()).data;
+  if (socket) assert.equal(integrations.connections.find((connection: { provider: string }) => connection.provider === 'SLACK')?.receiver?.state, 'CONNECTED');
   assert(integrations.commands.length >= 3); assert(integrations.commands.every((value: { status: string; replyStatus: string }) => value.status === 'PROCESSED' && value.replyStatus === 'SENT'));
   const history = area.getByRole('region', { name: 'Slack 명령 처리 기록', exact: true });
   await expect(history.getByText('명령 처리 완료', { exact: true })).toHaveCount(integrations.commands.length);
-  await expect(history.getByText(new RegExp(taskId))).toBeVisible();
-  mkdirSync('test-results', { recursive: true }); await history.screenshot({ path: 'test-results/phase3-slack-live-desktop.png' });
+  const taskReports = history.getByText(new RegExp(taskId));
+  assert(await taskReports.count() > 0);
+  for (let index = 0; index < await taskReports.count(); index++) await expect(taskReports.nth(index)).toBeVisible();
+  const desktop = socket ? '.local/browser-evidence/slack-socket-desktop.png' : 'test-results/phase3-slack-live-desktop.png';
+  const mobile = socket ? '.local/browser-evidence/slack-socket-mobile.png' : 'test-results/phase3-slack-live-mobile.png';
+  const evidence = socket ? area.getByRole('region', { name: 'Slack 연결', exact: true }) : history;
+  if (socket) await expect(evidence.getByRole('status')).toContainText('Slack 명령 수신 중');
+  mkdirSync(socket ? '.local/browser-evidence' : 'test-results', { recursive: true }); await evidence.screenshot({ path: desktop });
   await page.setViewportSize({ width: 390, height: 844 }); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  await history.screenshot({ path: 'test-results/phase3-slack-live-mobile.png' });
+  await evidence.screenshot({ path: mobile });
   assert.deepEqual(errors, []); assert.deepEqual(mutations, []);
   console.log(JSON.stringify({ verified: true, readOnly: true, projectId, taskId, commandCount: integrations.commands.length, taskStatus: task.status, source: task.source,
     originalHashVerified: true, modelRunsForTask: 0, pageErrors: errors.length, businessWrites: mutations.length,
-    screenshots: ['test-results/phase3-slack-live-desktop.png','test-results/phase3-slack-live-mobile.png'] }));
+    socketConnected: socket, screenshots: [desktop, mobile] }));
   await context.close();
 } finally { await browser.close(); }

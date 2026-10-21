@@ -72,13 +72,15 @@ VOICE는 일반 task POST에서 거부한다. 음성만으로 run/merge/배포·
 | POST /employees/:id/employment | action suspend/retire/rehire, expectedVersion |
 | GET/PUT /projects/:id/staffing | 배정 목록 / role·employeeId·기존 배정 expectedVersion |
 | DELETE /projects/:id/staffing/:role | expectedVersion을 검사하는 배정 해제 |
-| GET /projects/:id/integrations | connections·operations·비밀 없는 설정 이름. configured(발행 설정), webhookConfigured(서명 키 설정)를 분리 |
+| GET /projects/:id/integrations | connections·operations·비밀 없는 설정 이름. configured(발행 설정), webhookConfigured(HTTP 서명 키 설정)를 분리. Slack SOCKET 연결은 receiver(state·connectedAt·lastReceivedAt·errorCode·reconnects)와 publicConfig.mode/appId를 제공하며 토큰·WebSocket URL은 반환하지 않음 |
 | POST /projects/:id/integrations/operations | kind·runId·expectedRunVersion·선택 title/body. 실제 test/build·동일 SHA QA PASS 및 scope를 재검사하고 durable operation을 202로 반환 |
 | POST /projects/:id/integrations/operations/:operationId/reconcile | UNKNOWN GitHub 작업만 읽기 재조회, 중복 발행 없음 |
 
 kind는 ISSUE_CREATE/BRANCH_CREATE/PUSH_CANDIDATE/DRAFT_PR_CREATE/CI_REFRESH/MERGE_REQUEST/SLACK_REPORT다. operation SUCCEEDED는 해당 작업 확인의 성공이며 CI_REFRESH의 실제 검사 판정은 externalRef.status와 headSha·required를 확인한다. MISSING/NOT_PASSED를 검사 통과로 표시하지 않는다. MERGE_REQUEST는 scope 기록만 수행하며 승인·실제 merge를 실행하지 않는다. 실행 응답의 staffing은 해당 실행에 고정된 세 역할 프로필이고 사무실 응답의 employeeId/profileVersion/assignmentStatus는 현재 배정에 맞는 투영이다.
 
 공개 webhook `/api/webhooks/github/:connectionId`, `/api/webhooks/slack/:connectionId`는 Owner 쿠키 대신 raw body 서명·설치/team/channel/user scope와 durable delivery dedupe를 검사한다. Slack의 서명 inbox ACK는 업무 생성·실행·승인 완료를 의미하지 않는다. GitHub installation/token과 Slack 비밀값을 브라우저로 설정하는 API는 제공하지 않는다.
+
+Slack SOCKET 모드는 별도 공개 HTTP API 없이 공식 SDK의 인증된 연결에서 명령을 받는다. 앱·팀·채널·현재 Owner·연결 버전을 검사하고 inbox 영속화 후 ACK한다. 같은 연결에 대한 HTTP POST는 `HTTP_INGRESS_DISABLED`(409)로 거부한다. Socket ACK 역시 업무 실행·수락·merge 승인이 아니다. 설정·실제 검증은 docs/11의 Socket Mode 절을 따른다.
 
 ## Phase 2 사무실 구현 보충 — 2026-10-19
 

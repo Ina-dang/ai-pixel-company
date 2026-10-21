@@ -14,6 +14,7 @@ import { RepositorySandbox } from '../../../packages/sandbox/src/repository.js';
 import { parseSlackCommand, SlackCommands, type SlackReceipt } from './slack-commands.js';
 import { IntegrationMerges } from './integration-merges.js';
 import {maintenanceReason} from './maintenance.js';
+import { SlackSocketReceiver, socketFactory, type SocketFactory } from './slack-socket.js';
 
 export type Connection = { id: string; organization_id: string; project_id: string; provider: Provider; config: unknown; secret_refs: Record<string, string>; enabled: boolean; version: number };
 export type Operation = { id: string; connection_id: string; connection_version: number; organization_id: string; project_id: string; provider: Provider; kind: OperationKind; run_id: string; candidate_sha: string;
@@ -21,7 +22,7 @@ export type Operation = { id: string; connection_id: string; connection_version:
 type Receipt = SlackReceipt & { provider: Provider; payload: SlackReceipt['payload'] & { action?: string; headSha?: string }; attempts: number };
 const id = z.uuid();
 const requestSchema = z.strictObject({ kind: z.enum(operationKinds), runId: id, expectedRunVersion: z.number().int().positive(), title: z.string().min(1).max(200).optional(), body: z.string().min(1).max(6000).optional() });
-const setup = { githubEnv: ['AI_PIXEL_GITHUB_PRIVATE_KEY', 'AI_PIXEL_GITHUB_WEBHOOK_SECRET'], slackEnv: ['AI_PIXEL_SLACK_BOT_TOKEN', 'AI_PIXEL_SLACK_SIGNING_SECRET'] };
+const setup = { githubEnv: ['AI_PIXEL_GITHUB_PRIVATE_KEY', 'AI_PIXEL_GITHUB_WEBHOOK_SECRET'], slackEnv: ['AI_PIXEL_SLACK_BOT_TOKEN', 'AI_PIXEL_SLACK_SIGNING_SECRET', 'AI_PIXEL_SLACK_APP_TOKEN'] };
 const json = (tx: Transaction, value: unknown) => tx.json(JSON.parse(JSON.stringify(value)));
 const publicOperation = (row: Operation) => ({ id: row.id, provider: row.provider, kind: row.kind, status: row.status, runId: row.run_id, candidateSha: row.candidate_sha, errorCode: row.error_code, externalRef: row.external_ref, attempts: row.attempts, version: row.version, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() });
 function parseId(value: string) { const parsed = id.safeParse(value); if (!parsed.success) throw new ApiError(404, 'NOT_FOUND', '대상을 찾을 수 없습니다.'); return parsed.data; }
@@ -53,10 +54,13 @@ export class IntegrationService {
   private busy = false;
   private lastTickAt:string|null=null;
   private lastErrorAt:string|null=null;
-  health(){return{running:this.timer!==null,busy:this.busy,lastTickAt:this.lastTickAt,lastErrorAt:this.lastErrorAt};}
+  private socketTimer: ReturnType<typeof setInterval> | null = null;
+  private socketSyncing = false;
+  private sockets = new Map<string, { version: number; receiver: SlackSocketReceiver | null; errorCode: string | null }>();
+  health(){return{running:this.timer!==null,busy:this.busy,lastTickAt:this.lastTickAt,lastErrorAt:this.lastErrorAt,sockets:[...this.sockets.values()].map(entry=>entry.receiver?.health() ?? {state:'ERROR',errorCode:entry.errorCode})};}
   private commands: SlackCommands;
   readonly merges: IntegrationMerges;
-  constructor(readonly database: Database, readonly root: string, private readonly fetcher: typeof fetch = fetch) {
+  constructor(readonly database: Database, readonly root: string, private readonly fetcher: typeof fetch = fetch, private readonly socketClientFactory: SocketFactory = socketFactory) {
     this.secrets = new LocalSecretStore(root);
     this.commands = new SlackCommands(database, { connection: id => this.connection(id), credential: (c, field) => this.credential(c, field), fetcher });
     this.merges = new IntegrationMerges(database, { connection: id => this.connection(id), evidence: (org, project, run, version) => this.evidence(org, project, run, version),
@@ -73,10 +77,16 @@ export class IntegrationService {
     let entries: Array<{ organizationId: string; projectId: string; provider: Provider; config: unknown; secretRefs: Record<string, string> }>;
     try { entries = JSON.parse(content).connections; } catch { throw new IntegrationError('CONFIGURATION_INVALID', 409); }
     if (!Array.isArray(entries) || entries.length > 20) throw new IntegrationError('CONFIGURATION_INVALID', 409);
+    const socketApps = new Set<string>();
     for (const entry of entries) {
       if (!id.safeParse(entry.organizationId).success || !id.safeParse(entry.projectId).success || !['GITHUB', 'SLACK'].includes(entry.provider)) throw new IntegrationError('CONFIGURATION_INVALID', 409);
       if (entry.provider === 'GITHUB') githubConfig(entry.config); else slackConfig(entry.config);
-      const fields = entry.provider === 'GITHUB' ? ['privateKey', 'webhookSecret'] : ['botToken', 'signingSecret'];
+      if (entry.provider === 'SLACK' && slackConfig(entry.config).mode === 'SOCKET') {
+        const appId = slackConfig(entry.config).appId ?? '';
+        if (socketApps.has(appId)) throw new IntegrationError('SOCKET_APP_MAPPING_AMBIGUOUS', 409);
+        socketApps.add(appId);
+      }
+      const fields = entry.provider === 'GITHUB' ? ['privateKey', 'webhookSecret'] : slackConfig(entry.config).mode === 'SOCKET' ? ['botToken', 'appToken'] : ['botToken', 'signingSecret'];
       if (!entry.secretRefs || !fields.every(field => typeof entry.secretRefs[field] === 'string' && /^(?:env:AI_PIXEL_(?:GITHUB|SLACK)_[A-Z0-9_]+|file:[A-Za-z0-9_./-]+)$/.test(entry.secretRefs[field]))) throw new IntegrationError('SECRET_REFERENCE_DENIED', 403);
       await this.database.sql.begin(async tx => {
         await lockOrganization(tx, entry.organizationId);
@@ -98,6 +108,57 @@ export class IntegrationService {
   }
   private async credential(connection: Connection, field: string) {
     try { return await this.secrets.read(connection.secret_refs[field]); } catch { throw new IntegrationError('CREDENTIAL_UNCONFIGURED', 409); }
+  }
+  private async slackPayload(connection: Connection, value: Record<string, unknown>) {
+    const config = slackConfig(connection.config), user = value.user_id;
+    if (value.team_id !== config.teamId || value.channel_id !== config.channelId || typeof user !== 'string' || !config.userMappings[user]) throw new IntegrationError('SLACK_MAPPING_DENIED', 403);
+    const member = await this.database.sql`select 1 from memberships m join organizations o on o.id=m.organization_id
+      join projects p on p.organization_id=m.organization_id and p.id=${connection.project_id}
+      where m.organization_id=${connection.organization_id} and m.user_id=${config.userMappings[user]} and m.role='OWNER' and m.status='ACTIVE' and o.status='ACTIVE' and p.status='ACTIVE'`;
+    if (!member.length) throw new IntegrationError('SLACK_MAPPING_DENIED', 403);
+    if (value.command !== '/ai-pixel') throw new IntegrationError('SLACK_COMMAND_UNSUPPORTED', 400);
+    return { teamId: config.teamId, userId: user, actorId: config.userMappings[user], channelId: config.channelId, eventType: '/ai-pixel', command: parseSlackCommand(value.text) };
+  }
+  async receiveSocketCommand(connectionId: string, expectedVersion: number, envelopeId: string, value: Record<string, unknown>) {
+    const connection = await this.connection(connectionId), config = slackConfig(connection.config);
+    if (connection.provider !== 'SLACK' || config.mode !== 'SOCKET' || connection.version !== expectedVersion) throw new IntegrationError('SLACK_MAPPING_CHANGED', 403);
+    if (value.api_app_id !== config.appId || !/^[A-Za-z0-9-]{8,100}$/.test(envelopeId) || typeof value.trigger_id !== 'string' || !value.trigger_id || value.trigger_id.length > 500) throw new IntegrationError('SOCKET_APP_MISMATCH', 403);
+    const payload = { ...await this.slackPayload(connection, value), transport: 'SOCKET' };
+    const delivery = hash(`socket:${config.appId}:${value.trigger_id}`), bodyHash = hash(JSON.stringify(payload));
+    return this.database.sql.begin(async tx => {
+      await lockOrganization(tx, connection.organization_id);
+      const current = await tx`select 1 from integration_connections where id=${connectionId} and enabled=true and version=${expectedVersion}`;
+      if (!current.length) throw new IntegrationError('SLACK_MAPPING_CHANGED', 403);
+      const existing = await tx<{ body_hash: string }[]>`select body_hash from integration_inbox where connection_id=${connectionId} and delivery_id=${delivery}`;
+      if (existing[0]) { if (existing[0].body_hash !== bodyHash) throw new IntegrationError('DELIVERY_CONFLICT', 409); return { duplicate: true }; }
+      await tx`insert into integration_inbox(id,connection_id,connection_version,organization_id,project_id,provider,delivery_id,body_hash,event_type,payload)
+        values(${randomUUID()},${connectionId},${expectedVersion},${connection.organization_id},${connection.project_id},'SLACK',${delivery},${bodyHash},'slash_commands',${json(tx, payload)})`;
+      await emit(tx, { organizationId: connection.organization_id, projectId: connection.project_id, type: 'integration.webhook.received', aggregateVersion: expectedVersion,
+        payload: { provider: 'SLACK', eventType: 'slash_commands', deliveryId: delivery, transport: 'SOCKET' } });
+      return { duplicate: false };
+    });
+  }
+  async refreshSocketReceivers() {
+    if (this.socketSyncing) return; this.socketSyncing = true;
+    try {
+      const connections = await maintenanceReason(this.database.sql) ? [] : await this.database.sql<Connection[]>`select c.* from integration_connections c join projects p on p.id=c.project_id and p.organization_id=c.organization_id
+        join organizations o on o.id=c.organization_id where c.provider='SLACK' and c.enabled=true and c.config->>'mode'='SOCKET' and p.status='ACTIVE' and o.status='ACTIVE'`;
+      for (const [id, entry] of this.sockets) if (!connections.some(row => row.id === id && row.version === entry.version)) { await entry.receiver?.stop(); this.sockets.delete(id); }
+      for (const connection of connections) {
+        if (this.sockets.has(connection.id)) continue;
+        const entry: { version: number; receiver: SlackSocketReceiver | null; errorCode: string | null } = { version: connection.version, receiver: null, errorCode: null }; this.sockets.set(connection.id, entry);
+        try {
+          const config = slackConfig(connection.config), token = await this.credential(connection, 'appToken');
+          if (!/^xapp-[A-Za-z0-9-]{10,}$/.test(token)) throw new IntegrationError('CREDENTIAL_UNCONFIGURED', 409);
+          if (connections.filter(row => slackConfig(row.config).appId === config.appId).length !== 1) throw new IntegrationError('SOCKET_APP_MAPPING_AMBIGUOUS', 409);
+          await new SlackAdapter(config, await this.credential(connection, 'botToken'), this.fetcher).identity();
+          entry.receiver = new SlackSocketReceiver(token, (envelope, body) => this.receiveSocketCommand(connection.id, connection.version, envelope, body), () => {
+            void this.database.sql.begin(async tx => { await emit(tx, { organizationId: connection.organization_id, projectId: connection.project_id, type: 'integration.connection.updated', aggregateVersion: connection.version, payload: { provider: 'SLACK', receiverChanged: true } }); }).catch(() => undefined);
+          }, this.socketClientFactory);
+          entry.receiver.start();
+        } catch (error) { entry.errorCode = error instanceof IntegrationError ? error.code : 'SOCKET_CONFIGURATION_INVALID'; }
+      }
+    } finally { this.socketSyncing = false; }
   }
   private async repositoryScope(connection: Connection) {
     const config = githubConfig(connection.config);
@@ -130,11 +191,13 @@ export class IntegrationService {
       let reason: string | null = connection.enabled ? null : 'DISABLED', publicConfig: unknown = null;
       try {
         if (provider === 'GITHUB') { const c = githubConfig(connection.config); publicConfig = { installationId: c.installationId, repositoryId: c.repositoryId, repository: `${c.owner}/${c.repo}`, baseBranch: c.baseBranch, requiredChecks: c.requiredChecks, policyVersion: c.policyVersion }; await this.repositoryScope(connection); await this.credential(connection, 'privateKey'); }
-        else { const c = slackConfig(connection.config); publicConfig = { teamId: c.teamId, channelId: c.channelId, mappedUsers: Object.keys(c.userMappings).length }; await this.credential(connection, 'botToken'); }
+        else { const c = slackConfig(connection.config); publicConfig = { teamId: c.teamId, channelId: c.channelId, mappedUsers: Object.keys(c.userMappings).length, mode: c.mode ?? 'HTTP', appId: c.appId ?? null }; await this.credential(connection, 'botToken'); }
       } catch (error) { reason = error instanceof IntegrationError ? error.code : 'CONFIGURATION_INVALID'; }
       let webhookConfigured = false;
       try { await this.credential(connection, provider === 'GITHUB' ? 'webhookSecret' : 'signingSecret'); webhookConfigured = connection.enabled; } catch { /* Inbound credentials do not gate outbound-only operations. */ }
-      summaries.push({ id: connection.id, provider, configured: reason === null, webhookConfigured, enabled: connection.enabled, version: connection.version, publicConfig, reason });
+      const socketEntry = this.sockets.get(connection.id);
+      const receiver = provider === 'SLACK' && (publicConfig as { mode?: string } | null)?.mode === 'SOCKET' ? connection.enabled && socketEntry?.receiver ? socketEntry.receiver.health() : { state: 'STOPPED', connectedAt: null, lastReceivedAt: null, reconnects: 0, errorCode: connection.enabled ? socketEntry?.errorCode ?? 'SOCKET_NOT_RUNNING' : 'DISABLED' } : null;
+      summaries.push({ id: connection.id, provider, configured: reason === null, webhookConfigured, enabled: connection.enabled, version: connection.version, publicConfig, reason, receiver });
     }
     const operations = await this.database.sql<Operation[]>`select * from integration_operations where organization_id=${organizationId} and project_id=${projectId} order by created_at desc,id desc limit 100`;
     const commands = await this.database.sql`select id,event_type as "eventType",status,error_code as "errorCode",result,reply_status as "replyStatus",created_at as "createdAt" from integration_inbox
@@ -214,6 +277,7 @@ export class IntegrationService {
       try {
         const connection = await this.connection(parseId(c.req.param('id')));
         if (connection.provider !== provider) throw new IntegrationError('CONNECTION_UNAVAILABLE', 403);
+        if (provider === 'SLACK' && slackConfig(connection.config).mode === 'SOCKET') throw new IntegrationError('HTTP_INGRESS_DISABLED', 409);
         const raw = await rawBody(c.req.raw);
         const secret = await this.credential(connection, provider === 'GITHUB' ? 'webhookSecret' : 'signingSecret');
         const verified = provider === 'GITHUB' ? verifyGitHubSignature(raw, c.req.header('x-hub-signature-256') ?? null, secret)
@@ -235,19 +299,10 @@ export class IntegrationService {
           payload = { action: typeof value.action === 'string' ? value.action.slice(0, 50) : null, headSha: check?.head_sha ?? pull?.head?.sha ?? value.after ?? null };
         } else {
           if (typeof value.payload === 'string') { try { value = JSON.parse(value.payload); } catch { throw new IntegrationError('PAYLOAD_INVALID'); } }
-          const config = slackConfig(connection.config);
           if (value.type === 'url_verification') return c.json({ challenge: String(value.challenge ?? '').slice(0, 200) });
-          const event = value.event as { user?: string; channel?: string; type?: string } | undefined;
-          const team = typeof value.team === 'object' ? (value.team as { id?: string }).id : value.team_id;
-          const user = typeof value.user === 'object' ? (value.user as { id?: string }).id : value.user_id ?? event?.user;
-          const channel = typeof value.channel === 'object' ? (value.channel as { id?: string }).id : value.channel_id ?? event?.channel;
-          if (team !== config.teamId || channel !== config.channelId || typeof user !== 'string' || !config.userMappings[user]) throw new IntegrationError('SLACK_MAPPING_DENIED', 403);
-          const member = await this.database.sql`select 1 from memberships where organization_id=${connection.organization_id} and user_id=${config.userMappings[user]} and role='OWNER' and status='ACTIVE'`;
-          if (!member.length) throw new IntegrationError('SLACK_MAPPING_DENIED', 403);
-          if (value.command !== '/ai-pixel' || !c.req.header('content-type')?.includes('application/x-www-form-urlencoded')) throw new IntegrationError('SLACK_COMMAND_UNSUPPORTED', 400);
-          const command = parseSlackCommand(value.text);
-          delivery = typeof value.event_id === 'string' ? value.event_id : hash(raw); eventType = String(event?.type ?? value.type ?? value.command ?? 'command').slice(0, 50);
-          payload = { teamId: config.teamId, userId: user, actorId: config.userMappings[user], channelId: config.channelId, eventType, command };
+          if (!c.req.header('content-type')?.includes('application/x-www-form-urlencoded')) throw new IntegrationError('SLACK_COMMAND_UNSUPPORTED', 400);
+          payload = await this.slackPayload(connection, value);
+          delivery = typeof value.event_id === 'string' ? value.event_id : hash(raw); eventType = '/ai-pixel';
         }
         if (!/^[A-Za-z0-9-]{8,100}$/.test(delivery) || !/^[A-Za-z0-9_/-]{1,60}$/.test(eventType)) throw new IntegrationError('DELIVERY_INVALID', 400);
         const result = await this.database.sql.begin(async tx => {
@@ -274,8 +329,13 @@ export class IntegrationService {
     await this.database.sql`update integration_inbox set reply_status='UNKNOWN',error_code='PROCESS_RESTART_EFFECT_UNKNOWN' where reply_status='SENDING'`;
     await this.merges.recover();
     this.timer = setInterval(() => {this.lastTickAt=new Date().toISOString();void this.processOnce().catch(() => {this.lastErrorAt=new Date().toISOString();}); }, 1000);
+    await this.refreshSocketReceivers();
+    this.socketTimer = setInterval(() => { void this.refreshSocketReceivers().catch(() => { this.lastErrorAt = new Date().toISOString(); }); }, 5000);
   }
-  async stop() { if (this.timer) clearInterval(this.timer);this.timer=null; while (this.busy) await new Promise(done => setTimeout(done, 20)); }
+  async stop() { if (this.timer) clearInterval(this.timer);this.timer=null; if (this.socketTimer) clearInterval(this.socketTimer);this.socketTimer=null;
+    while (this.socketSyncing) await new Promise(done => setTimeout(done, 20));
+    await Promise.all([...this.sockets.values()].map(entry => entry.receiver?.stop())); this.sockets.clear();
+    while (this.busy) await new Promise(done => setTimeout(done, 20)); }
   async processOnce() {
     if (this.busy) return false; this.busy = true;
     try {
