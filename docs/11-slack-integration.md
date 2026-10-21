@@ -1,5 +1,19 @@
 # Slack 협업과 사용자 보고
 
+## 업무 중심 보고 후속 — 2026-10-21
+
+결과 보고·업무 등록 응답·상태 조회를 업무명 → 변경 요약 → 검증 결과 → 다음 할 일 → 업무 상세 링크 순서로 표시한다. 상태 조회는 같은 조직·프로젝트의 최근 업무 3건과 업무별 최신 실행을 읽는다. 업무 등록은 미실행, 실패·중단은 중단 사유 확인, 검토 대기는 수락 여부 결정, 수락 완료는 후속 업무 결정으로 안내한다.
+
+변경 설명은 현재 후보와 일치하는 Developer의 첫 설명 문장만 사용한다. 개발 당시의 미검증 단서는 현재 테스트 판정과 섞지 않는다. 검증 결과는 같은 후보 SHA의 서버 test/build exitCode·QA verdict/issue에서 읽고, 없는 결과를 성공으로 표시하지 않는다. 원시 코드·검증 로그는 Slack에 보내지 않는다. 사용자/모델 문자열의 mention·링크 구문을 차단하고 길이를 제한한다. 공식 [Slack 메시지 형식](https://docs.slack.dev/messaging/formatting-message-text/)의 링크·특수문자 규칙을 2026-10-21 확인했다(개별 변경일 미공개).
+
+상세 링크는 로컬 `127.0.0.1:3000/?project=…&task=…#task-inspector`이며 로그인·프로젝트 접근 검사를 유지한다. 다른 기기용 운영 주소는 제공하지 않는다. 확인된 checkpoint delivery의 같은 후보·저장소·Git 커밋만 바로가기로 표시한다. 보고를 보내도 task/run 상태·수락·merge·배포는 변경하지 않는다.
+
+`how-to-trash-v1`의 Slack 보고는 승인 manifest·로컬 snapshot·admissionSha를 포함한 파일 해시를 대조한다. 이 예외는 Slack 보고에만 적용하고 기존 GitHub 시험용 manifest 제한은 유지한다. snapshot을 확인할 수 없으면 발신을 거부한다. 실제 how-to-trash 프로젝트는 기존 `내손비/#ai-pixel-test`로 발신 연결만 추가했으며 userMappings는 비어 있어 명령 권한이 추가되지 않는다.
+
+실제 outbox operation `f1160e36-851c-4510-9ee7-e59add4cab2c`는 SUCCEEDED이며 [Slack 메시지](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792541692107489)를 별도 connector로 읽어 다섯 항목·커밋 `7b07edc`를 확인했다. 발신 전 이미 결과는 SUCCEEDED·version42였고 발신 뒤 상태·version·turn6은 그대로였다. 1건을 발신한 뒤 같은 봇 메시지의 개발 당시 단서를 제거하도록 수정했다. 새 유료 API·직원 실행·터널·수락·merge·운영 배포는 실행하지 않았다. 이번에는 외부 slash command 수신을 재시험하지 않았으며, 명령 처리·중복 방지·권한 철회는 분리된 DB의 통합 테스트로 검증했다.
+
+첫 실제 발신 전 검사는 수락 완료 상태와 기존 시험 전용 manifest 제한 때문에 각각 중단됐으며 메시지는 보내지 않았다. 이후 원래 저장소 검증 경계에 맞춰 보완했다. UNKNOWN 알림은 여전히 자동 재발행하지 않는다.
+
 ## Phase 3 구현·설정 경계 — 2026-10-19
 
 Slack 전용 bot token, 고정 team/channel·Owner user mapping, raw body 서명/재생 방지·durable inbox와 한국어 결과 보고 adapter를 구현했다. `/ai-pixel 도움말|help`, `상태|status`, `업무|task <원문>`은 durable receipt 후 신속하게 HTTP200 ephemeral ACK하고 큐에서 처리한다. 접수 응답은 업무 생성·실행·승인 성공을 뜻하지 않는다. interactive 승인과 Slack에서의 실행·결과 수락·merge 명령은 지원하지 않는다.

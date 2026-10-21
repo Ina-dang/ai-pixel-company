@@ -282,7 +282,7 @@ export class SlackAdapter {
   async report(id: string, text: string, threadTs?: string) {
     await this.identity();
     await this.beforeRequest();
-    const result = await jsonRequest(this.fetcher, 'https://slack.com/api/chat.postMessage', this.token, 'POST', { channel: this.config.channelId, text: safeText(text), client_msg_id: id, unfurl_links: false, unfurl_media: false,
+    const result = await jsonRequest(this.fetcher, 'https://slack.com/api/chat.postMessage', this.token, 'POST', { channel: this.config.channelId, text: safeText(text), client_msg_id: id, parse: 'none', link_names: false, unfurl_links: false, unfurl_media: false,
       ...(threadTs && /^\d+\.\d+$/.test(threadTs) ? { thread_ts: threadTs } : {}) });
     if (!result.ok) throw new IntegrationError(result.error === 'ratelimited' ? 'RATE_LIMITED' : ['invalid_auth', 'token_revoked', 'account_inactive'].includes(String(result.error)) ? 'CREDENTIAL_REVOKED' : 'REMOTE_REJECTED', result.error === 'ratelimited' ? 429 : 409, result.error === 'ratelimited' ? 60 : null);
     if (result.channel !== this.config.channelId || typeof result.ts !== 'string' || !/^\d+\.\d+$/.test(result.ts)) throw new IntegrationError('EFFECT_UNKNOWN', 503);

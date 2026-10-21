@@ -7,7 +7,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { audit, emit, lockOrganization, mutate } from './repository.js';
 import { ApiError, type ApiEnv } from './security.js';
-import type { WorkflowRow } from './workflows.js';
+import { workflowView, type WorkflowRow } from './workflows.js';
+import { assertRepositoryReportManifest, slackTaskReport } from './slack-report.js';
+import type { TaskStatus } from '@ai-pixel/contracts';
+import { RepositorySandbox } from '../../../packages/sandbox/src/repository.js';
 import { parseSlackCommand, SlackCommands, type SlackReceipt } from './slack-commands.js';
 import { IntegrationMerges } from './integration-merges.js';
 import {maintenanceReason} from './maintenance.js';
@@ -138,13 +141,18 @@ export class IntegrationService {
       where organization_id=${organizationId} and project_id=${projectId} and provider='SLACK' order by created_at desc,id desc limit 30`;
     return { connections: summaries, operations: operations.map(publicOperation), mergeRequests: await this.merges.list(organizationId, projectId), commands, setup };
   }
-  private async evidence(organizationId: string, projectId: string, runId: string, version: number) {
+  private async evidence(organizationId: string, projectId: string, runId: string, version: number, slackReport = false) {
     const rows = await this.database.sql<WorkflowRow[]>`select * from workflow_runs where organization_id=${organizationId} and project_id=${projectId} and id=${runId}`;
     const row = rows[0], checkpoint = row?.checkpoint, qa = checkpoint?.roles.filter(role => role.role === 'QA').at(-1);
     if (!row || row.version !== version) throw new IntegrationError('RUN_VERSION_CHANGED', 409);
     if (!['WAITING_APPROVAL', 'SUCCEEDED'].includes(row.status) || !checkpoint.workspace?.diff || checkpoint.verification?.sha !== checkpoint.workspace.sha || checkpoint.verification.test.exitCode !== 0 || checkpoint.verification.build.exitCode !== 0
       || !Object.values(checkpoint.verification.sandbox).every(value => value === true) || qa?.candidateSha !== checkpoint.workspace.sha || qa.output.candidateSha !== checkpoint.workspace.sha || qa.output.verdict !== 'PASS' || qa.output.issues.length) throw new IntegrationError('EVIDENCE_REQUIRED', 409);
-    assertCandidateManifest(checkpoint.workspace.files, checkpoint.workspace.sha);
+    if (slackReport && row.fixture === 'how-to-trash-v1' && row.repository_source) {
+      let snapshot: Awaited<ReturnType<RepositorySandbox['snapshot']>>;
+      try { snapshot = await new RepositorySandbox(this.root, row.repository_source).snapshot(runId); }
+      catch { throw new IntegrationError('REPORT_MANIFEST_UNAVAILABLE', 409); }
+      assertRepositoryReportManifest(workflowView(row), snapshot);
+    } else assertCandidateManifest(checkpoint.workspace.files, checkpoint.workspace.sha);
     return row;
   }
   routes() {
@@ -158,7 +166,7 @@ export class IntegrationService {
     routes.post('/projects/:id/integrations/operations', async c => {
       const projectId = parseId(c.req.param('id')), body = await input(c.req.raw), auth = c.get('auth');
       try {
-        const run = await this.evidence(auth.organizationId, projectId, body.runId, body.expectedRunVersion);
+        const run = await this.evidence(auth.organizationId, projectId, body.runId, body.expectedRunVersion, body.kind === 'SLACK_REPORT');
         const provider = body.kind === 'SLACK_REPORT' ? 'SLACK' : 'GITHUB';
         const rows = await this.database.sql<Connection[]>`select * from integration_connections where organization_id=${auth.organizationId} and project_id=${projectId} and provider=${provider} and enabled=true`;
         const connection = rows[0]; if (!connection) throw new IntegrationError('CREDENTIAL_UNCONFIGURED', 409);
@@ -324,7 +332,7 @@ export class IntegrationService {
   private async executeAttempt(operation: Operation, transport: typeof fetch) {
     const connection = await this.connection(operation.connection_id);
     if (connection.version !== operation.connection_version) throw new IntegrationError('CONNECTION_VERSION_CHANGED', 409);
-    const run = await this.evidence(operation.organization_id, operation.project_id, operation.run_id, operation.request.expectedRunVersion);
+    const run = await this.evidence(operation.organization_id, operation.project_id, operation.run_id, operation.request.expectedRunVersion, operation.kind === 'SLACK_REPORT');
     if (run.checkpoint.workspace?.sha !== operation.candidate_sha) throw new IntegrationError('CANDIDATE_CHANGED', 409);
     const task = await this.database.sql<{ title: string }[]>`select title from tasks where organization_id=${operation.organization_id} and id=${run.task_id}`;
     const title = operation.request.title ?? task[0]?.title ?? 'AI Pixel 작업 결과';
@@ -333,12 +341,14 @@ export class IntegrationService {
       const adapter = new SlackAdapter(slackConfig(connection.config), await this.credential(connection, 'botToken'), transport, async () => {
         const live = await this.connection(connection.id);
         if (live.version !== operation.connection_version) throw new IntegrationError('CONNECTION_VERSION_CHANGED', 409);
-        await this.evidence(operation.organization_id, operation.project_id, operation.run_id, operation.request.expectedRunVersion);
+        await this.evidence(operation.organization_id, operation.project_id, operation.run_id, operation.request.expectedRunVersion, true);
       });
       const current = await this.connection(connection.id);
       if (current.version !== operation.connection_version) throw new IntegrationError('CONNECTION_VERSION_CHANGED', 409);
-      await this.evidence(operation.organization_id, operation.project_id, operation.run_id, operation.request.expectedRunVersion);
-      return adapter.report(operation.id, `[QA | 결과 보고 | ${run.task_id}]\n${safeText(title, 200)}\n상태: ${run.status === 'SUCCEEDED' ? 'Owner 결과 수락' : 'Owner 결과 수락 대기'}\n테스트·빌드: 성공 / QA: PASS\n후보 SHA: ${operation.candidate_sha}\n원격 merge: 실행하지 않음`);
+      await this.evidence(operation.organization_id, operation.project_id, operation.run_id, operation.request.expectedRunVersion, true);
+      const details = await this.database.sql<{ title: string; status: TaskStatus; name: string }[]>`select t.title,t.status,p.name from tasks t join projects p on p.id=t.project_id and p.organization_id=t.organization_id where t.organization_id=${operation.organization_id} and t.project_id=${operation.project_id} and t.id=${run.task_id}`;
+      if (!details[0]) throw new IntegrationError('EVIDENCE_REQUIRED', 409);
+      return adapter.report(operation.id, `*AI Pixel · 업무 결과 보고*\n${slackTaskReport({ projectId: operation.project_id, projectName: details[0].name, task: { id: run.task_id, title: details[0].title, status: details[0].status }, run: workflowView(run) })}\n실행·수락·merge·운영 배포는 이 보고로 시작하지 않습니다.`);
     }
     const adapter = await this.adapter(connection, operation, transport), branch = `ai-pixel/${operation.run_id}`;
     switch (operation.kind) {

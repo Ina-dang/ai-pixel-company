@@ -5,6 +5,9 @@ import { containsSecret, IntegrationError, slackConfig, SlackAdapter } from '@ai
 import type { Connection } from './integrations.js';
 import { emit, lockOrganization } from './repository.js';
 import { createTaskCommand } from './task-commands.js';
+import { workflowView, type WorkflowRow } from './workflows.js';
+import { slackDashboardLink, slackLabel, slackTaskReport } from './slack-report.js';
+export { slackDashboardLink } from './slack-report.js';
 
 export type SlackCommand = { kind: 'HELP' | 'STATUS' | 'TASK'; original?: string };
 export function parseSlackCommand(text: unknown): SlackCommand {
@@ -18,10 +21,6 @@ export function parseSlackCommand(text: unknown): SlackCommand {
 export type SlackReceipt = { id: string; connection_id: string; connection_version: number; organization_id: string; project_id: string;
   payload: { actorId: string; userId: string; command: SlackCommand }; result: { text: string; taskId?: string } | null };
 type Dependencies = { connection: (id: string) => Promise<Connection>; credential: (connection: Connection, field: string) => Promise<string>; fetcher: typeof fetch };
-export function slackDashboardLink(projectId: string, taskId?: string) {
-  const query = new URLSearchParams({ project: projectId }); if (taskId) query.set('task', taskId);
-  return `<http://127.0.0.1:3000/?${query}#task-inspector|대시보드 우측 상세 열기 (이 PC)>`;
-}
 export class SlackCommands {
   constructor(private database: Database, private deps: Dependencies) {}
   private async authorized(receipt: SlackReceipt, expectedReplyStatus?: string) {
@@ -46,6 +45,8 @@ export class SlackCommands {
       const current = await tx`select 1 from integration_inbox where id=${receipt.id} and status='PROCESSING' for update`;
       if (!current.length) return;
       const command = receipt.payload.command;
+      const projects = await tx<{ name: string }[]>`select name from projects where organization_id=${receipt.organization_id} and id=${receipt.project_id}`;
+      const projectName = projects[0]?.name ?? '현재 프로젝트';
       let result: { text: string; taskId?: string };
       if (command.kind === 'TASK') {
         const original = command.original ?? '';
@@ -53,10 +54,16 @@ export class SlackCommands {
           title: Array.from((original.split(/\r?\n/).find(line => line.trim()) ?? '').trim()).slice(0, 100).join(''), commandOriginalKo: original, source: 'SLACK',
           acceptanceCriteria: [{ id: 'AC-1', descriptionKo: '업무 원문에 따른 결과와 검증 근거를 Owner가 확인한다.', method: 'manual', required: true }],
         });
-        result = { taskId: task.id, text: `업무를 등록했습니다.\n상태: 할 일 · 실행 전\n${slackDashboardLink(receipt.project_id, task.id)}\n열면 요청 원문·수용 기준·직원 보고·검증 결과·확인된 커밋을 볼 수 있습니다.\n다음: 수용 기준을 검토하고 웹에서 실행을 요청하세요. 자동 실행·수락·merge는 하지 않습니다.\n업무 ID: ${task.id}` };
+        result = { taskId: task.id, text: `*업무 등록 완료*\n${slackTaskReport({ projectId: receipt.project_id, projectName, task })}\n자동 실행·수락·merge·배포는 하지 않습니다.` };
       } else if (command.kind === 'STATUS') {
         const counts = await tx<{ status: TaskStatus; count: number }[]>`select status,count(*)::int as count from tasks where organization_id=${receipt.organization_id} and project_id=${receipt.project_id} group by status order by status`;
-        result = { text: `서버에 기록된 업무 현황\n${counts.map(row => `${taskLabels[row.status]}: ${row.count}`).join('\n') || '등록된 업무 없음'}\n${slackDashboardLink(receipt.project_id)}\n업무를 선택하면 우측에서 변경 요약·테스트·QA·확인된 커밋을 볼 수 있습니다. merge 승인은 별도입니다.` };
+        const tasks = await tx<{ id: string; title: string; status: TaskStatus }[]>`select id,title,status from tasks where organization_id=${receipt.organization_id} and project_id=${receipt.project_id} order by updated_at desc,id limit 3`;
+        const reports: string[] = [];
+        for (const task of tasks) {
+          const runs = await tx<WorkflowRow[]>`select * from workflow_runs where organization_id=${receipt.organization_id} and project_id=${receipt.project_id} and task_id=${task.id} order by created_at desc,id desc limit 1`;
+          reports.push(slackTaskReport({ projectId: receipt.project_id, projectName, task, run: runs[0] ? workflowView(runs[0]) : undefined }));
+        }
+        result = { text: `*업무 현황 · ${slackLabel(projectName, 80)}*\n${counts.map(row => `${taskLabels[row.status]}: ${row.count}`).join(' / ') || '등록된 업무 없음'}\n\n${reports.join('\n\n') || `다음 할 일 · /ai-pixel 업무 <원문>으로 업무를 등록해 주세요.\n${slackDashboardLink(receipt.project_id)}`}\n최근 업무 최대 3건입니다. 전체 목록은 상세 화면에서 확인하세요. 실행·수락·merge·배포는 이 조회로 시작하지 않습니다.` };
       } else result = { text: `/ai-pixel 상태 — 서버 업무 상태 조회\n/ai-pixel 업무 <원문> — 할 일 등록 (자동 실행 없음)\n/ai-pixel 도움말 — 명령 안내\n${slackDashboardLink(receipt.project_id)}\n프로젝트·업무 선택 → 우측 상세에서 결과·변경 파일·검증·커밋 확인 → 수락 여부 결정. 실행·merge·배포는 자동으로 시작하지 않습니다.` };
       await tx`update integration_inbox set status='PROCESSED',result=${tx.json(result)},reply_status='PENDING',updated_at=now() where id=${receipt.id}`;
       await tx`insert into audit_logs(id,organization_id,project_id,actor_type,actor_id,action,target_type,target_id,request_id,outcome,metadata)
@@ -77,7 +84,7 @@ export class SlackCommands {
         return this.deps.fetcher(url, init);
       };
       const adapter = new SlackAdapter(slackConfig(connection.config), await this.deps.credential(connection, 'botToken'), transport, async () => { await this.authorized(receipt, 'SENDING'); });
-      const reference = await adapter.report(receipt.id, `[AI Pixel | 명령 결과 | ${receipt.id}]\n${receipt.result?.text ?? '처리 결과를 웹에서 확인하세요.'}`);
+      const reference = await adapter.report(receipt.id, `[AI Pixel | 명령 결과]\n${receipt.result?.text ?? '처리 결과를 웹에서 확인하세요.'}`);
       await this.database.sql`update integration_inbox set reply_status='SENT',reply_ref=${this.database.sql.json(reference)},updated_at=now() where id=${receipt.id} and reply_status='SENDING'`;
     } catch (error) {
       // Never repeat a possibly delivered notification, including after restart.

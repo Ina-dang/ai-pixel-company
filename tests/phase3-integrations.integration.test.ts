@@ -27,6 +27,7 @@ let remoteHead = BASE;
 let baseHead = BASE, mergeDraft = true, mergeable = true, ciPass = true, merged = false, mergeTimeout = false, protectedBranch = false, ciEvidenceId = 1, rules: unknown[] = [];
 let calls: Array<{ path: string; method: string }> = [];
 let issues: Array<Record<string, unknown>> = [];
+let slackMessages: Array<{ channel: string; text: string; client_msg_id: string; unfurl_links: boolean; parse: string; link_names: boolean }> = [];
 const respond = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers });
 const fetcher: typeof fetch = async (url, init = {}) => {
   const parsed = new URL(String(url)), path = parsed.pathname + parsed.search, method = init.method ?? 'GET';
@@ -65,7 +66,7 @@ const fetcher: typeof fetch = async (url, init = {}) => {
   if (path.endsWith('/pulls') && method === 'POST') { expect(body.draft).toBe(true); return respond({ number: 9, html_url: 'https://github.com/Ina-dang/ai-pixel-company/pull/9', head: { sha: remoteHead }, base: { ref: 'main' } }); }
   if (path.includes('/check-runs?')) return respond({ check_runs: [{ id: ciEvidenceId, name: 'unit', head_sha: remoteHead, status: 'completed', conclusion: ciPass ? 'success' : 'failure' }] });
   if (path.includes('/status?')) return respond({ statuses: [] });
-  if (path === '/api/chat.postMessage') { if (mode === 'unknown') throw new Error('unknown Slack send'); return respond({ ok: true, channel: 'C123', ts: '1234567890.000001' }); }
+  if (path === '/api/chat.postMessage') { slackMessages.push(body); if (mode === 'unknown') throw new Error('unknown Slack send'); return respond({ ok: true, channel: 'C123', ts: '1234567890.000001' }); }
   throw new Error(`Unexpected controlled transport path: ${method} ${path}`);
 };
 async function request(path: string, body?: unknown) {
@@ -91,7 +92,7 @@ beforeEach(async () => {
   await database.sql`truncate organizations,users cascade`; await initializeOwner(database);
   projectId = randomUUID(); runId = randomUUID(); githubId = randomUUID(); slackId = randomUUID(); const taskId = randomUUID();
   remoteHead = BASE; baseHead = BASE; mergeDraft = true; mergeable = true; ciPass = true; merged = false; mergeTimeout = false; protectedBranch = false; ciEvidenceId = 1; rules = [];
-  calls = []; issues = []; mode = 'success'; confirmationFails = false;
+  calls = []; issues = []; slackMessages = []; mode = 'success'; confirmationFails = false;
   const checkpoint = { ...initialCheckpoint(), stage: 'QA', workspace: { sha: MANIFEST, diff: '+fixed addition', files: FILES },
     verification: { sha: MANIFEST, test: { exitCode: 0, output: 'passed' }, build: { exitCode: 0, output: '' }, sandbox: { networkDisabled: true, readOnlyRoot: true, resourceLimited: true }, verifiedAt: new Date().toISOString() },
     roles: [{ role: 'QA', threadId: 'controlled-role-evidence', turnId: null, candidateSha: MANIFEST, usage: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 }, completedAt: new Date().toISOString(), output: { summaryKo: '검토 완료', specEn: '', acceptanceCriteria: [], files: [], verdict: 'PASS', candidateSha: MANIFEST, issues: [] } }] };
@@ -215,6 +216,27 @@ describe('Phase 3 durable integration boundaries', () => {
     expect((await database.sql`select status from workflow_runs where id=${runId}`)[0].status).toBe('WAITING_APPROVAL');
     expect(JSON.stringify(await status())).not.toContain('test-bot-token');
   });
+  test('Slack report uses the stored task name, evidence and detail link instead of a request title', async () => {
+    const response = await request(`/projects/${projectId}/integrations/operations`, { kind: 'SLACK_REPORT', runId, expectedRunVersion: 1, title: 'Override is not the task name' });
+    expect(response.status).toBe(202); await service.processOnce();
+    expect(slackMessages).toHaveLength(1);
+    const message = slackMessages[0]; expect(message).toMatchObject({ channel: 'C123', unfurl_links: false, parse: 'none', link_names: false });
+    expect(message.text).toContain('업무명* · 실제 결과 보고'); expect(message.text).not.toContain('Override is not');
+    for (const label of ['변경 요약', '검증 결과', '다음 할 일', '상세 화면']) expect(message.text).toContain(label);
+    expect(message.text).toContain('테스트 통과 · 빌드 통과 · QA PASS'); expect(message.text).toContain(`project=${projectId}&task=`);
+    expect((await database.sql`select status,version from workflow_runs where id=${runId}`)[0]).toMatchObject({ status: 'WAITING_APPROVAL', version: 1 });
+    expect(await service.processOnce()).toBe(false); expect(slackMessages).toHaveLength(1);
+  });
+  test('Slack repository reporting never broadens GitHub fixture writes and requires a real admitted snapshot', async () => {
+    const files = [{ path: 'src/app/page.tsx', content: 'export default function Page() { return null; }' }];
+    const repositoryRunId = randomUUID();
+    await database.sql`insert into workflow_runs(id,organization_id,project_id,task_id,command_original_ko,status,fixture,repository_source,checkpoint)
+      select ${repositoryRunId},organization_id,project_id,task_id,command_original_ko,'SUCCEEDED','how-to-trash-v1',${database.sql.json({ profile: 'how-to-trash-v1', repositoryUrl: 'https://github.com/Ina-dang/how-to-trash.git', baseSha: BASE, admissionSha: MANIFEST, imageId: `sha256:${MANIFEST}` })},jsonb_set(checkpoint,'{workspace,files}',${database.sql.json(files)}) from workflow_runs where id=${runId}`;
+    runId = repositoryRunId;
+    expect((await operation('ISSUE_CREATE', 409)).error.code).toBe('CANDIDATE_MANIFEST_INVALID');
+    expect((await operation('SLACK_REPORT', 409)).error.code).toBe('REPORT_MANIFEST_UNAVAILABLE');
+    expect(calls).toEqual([]); expect(slackMessages).toHaveLength(0);
+  });
   test('a forged candidate or changed project repository is rejected before any external request', async () => {
     await database.sql`update workflow_runs set checkpoint=jsonb_set(checkpoint,'{workspace,files,0,content}','"changed after QA"'::jsonb) where id=${runId}`;
     const forged = await operation('ISSUE_CREATE', 409); expect(forged.error.code).toBe('CANDIDATE_MANIFEST_CHANGED'); expect(calls).toEqual([]);
@@ -274,6 +296,9 @@ describe('Phase 3 Slack commands and explicit merge execution', () => {
     expect(receipts[0]).toMatchObject({ status: 'PROCESSED', reply_status: 'SENT', result: { taskId: tasks[0].id } });
     expect(JSON.stringify(receipts)).not.toContain('response-secret'); expect(JSON.stringify(receipts)).not.toContain('hooks.slack.com');
     expect(calls.filter(call => call.path === '/api/chat.postMessage')).toHaveLength(1);
+    expect(slackMessages[0].text).toContain('업무명* · 실제 업무 원문');
+    expect(slackMessages[0].text).toContain('검증 결과* · 미실행');
+    expect(slackMessages[0].text).toContain(`task=${tasks[0].id}#task-inspector`);
     expect((await status()).commands[0].result.taskId).toBe(tasks[0].id);
   });
   test('rechecks queued Slack mapping version and current Owner membership before creating a task', async () => {
@@ -291,6 +316,9 @@ describe('Phase 3 Slack commands and explicit merge execution', () => {
     expect((await status()).commands).toHaveLength(2);
     expect(calls.filter(call => call.path === '/api/chat.postMessage')).toHaveLength(2);
     expect(calls.some(call => call.path.includes('/merge'))).toBe(false);
+    expect(slackMessages[1].text).toContain('업무명* · 실제 결과 보고');
+    expect(slackMessages[1].text).toContain('검증 결과* · 테스트 통과 · 빌드 통과 · QA PASS');
+    expect(slackMessages[1].text).toContain('다음 할 일'); expect(slackMessages[1].text).toContain('#task-inspector');
   });
   test('a queued Slack task loses authority when its mapped Owner membership is revoked', async () => {
     await slackCommand('업무 권한 철회 후 등록 금지');

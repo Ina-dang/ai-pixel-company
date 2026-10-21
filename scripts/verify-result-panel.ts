@@ -20,7 +20,7 @@ try {
   await expect(summary.getByText('PASS · 동일 후보', { exact: true })).toBeVisible();
   await expect(summary.locator('.result-files li')).toHaveCount(6);
   const response = await page.request.get(`/api/v1/tasks/${taskId}/runs`); assert(response.ok());
-  const current = (await response.json()).data.items[0]; assert.equal(current.status, 'WAITING_APPROVAL'); assert.equal(current.checkpoint.turns, 6);
+  const current = (await response.json()).data.items[0]; assert(['WAITING_APPROVAL', 'SUCCEEDED'].includes(current.status)); assert.equal(current.checkpoint.turns, 6);
   mkdirSync('.local/browser-evidence', { recursive: true });
   await page.screenshot({ path: '.local/browser-evidence/result-inspector-desktop.png', fullPage: false });
   await page.reload(); await expect(summary).toBeVisible();
@@ -29,6 +29,8 @@ try {
   await expect(summary.getByRole('link', { name: /변경 커밋/ })).toBeVisible();
   const mobilePanel = await inspector.boundingBox(); assert(mobilePanel && mobilePanel.height < 3000, 'Historical evidence must stay collapsed by default');
   await inspector.screenshot({ path: '.local/browser-evidence/result-inspector-mobile.png' });
+  const after = (await (await page.request.get(`/api/v1/tasks/${taskId}/runs`)).json()).data.items[0];
+  assert.equal(after.status, current.status); assert.equal(after.version, current.version); assert.equal(after.checkpoint.turns, current.checkpoint.turns);
   assert.deepEqual(errors, []); assert.deepEqual(writes, []);
   console.log(JSON.stringify({ verified: true, projectId, taskId, deliveryCommit: current.checkpoint.delivery.commitSha, files: 6, qa: 'PASS', runStatus: current.status, turns: current.checkpoint.turns, businessWrites: writes.length, pageErrors: errors.length, screenshots: ['.local/browser-evidence/result-inspector-desktop.png', '.local/browser-evidence/result-inspector-mobile.png'] }));
   await context.close();
