@@ -15,6 +15,18 @@ const stopped = () => stopping || read(stopPath)?.launchId === launchId;
 const record = value => writeFileSync(statusPath, JSON.stringify({ ...value, supervisorPid: process.pid, launchId, updatedAt: new Date().toISOString() }));
 const services = { api: { state: 'STARTING' }, web: { state: 'STARTING' } };
 const serviceRecord = name => value => { services[name] = value; record(workspaceState(services)); };
+function removeOwnerFile() {
+  try { unlinkSync(lockPath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
+process.once('uncaughtExceptionMonitor', error => {
+  // Preserve a safe bootstrap diagnostic without suppressing the fatal exit.
+  // Do not replace another live owner's status if this invocation lost the lock.
+  const errorCode = error instanceof StartupError ? error.code : 'BOOTSTRAP_FAILED';
+  try {
+    appendFileSync(resolve(area, 'bootstrap.log'), `${JSON.stringify({ event: 'SUPERVISOR_CRASH', utc: new Date().toISOString(), supervisorPid: process.pid, launchId, errorCode })}\n`);
+    if (read(lockPath)?.launchId === launchId) record({ ...workspaceState(services), state: 'ERROR', errorCode });
+  } catch { /* Keep the original fatal exit when diagnostics are unavailable. */ }
+});
 
 function command(args, timeout = 15_000) {
   return new Promise(resolveCommand => {
@@ -118,19 +130,30 @@ if (previous) {
   const observed = processOwner(previous.pid);
   // Legacy locks from the first installation have no creation timestamp.
   if (observed && (!previous.createdAt || sameProcessOwner(previous, observed))) process.exit(0);
-  unlinkSync(lockPath);
+  // The old owner may remove its own lock while processOwner() is querying it.
+  removeOwnerFile();
 }
 const identity = processOwner(process.pid);
 if (!identity) throw new StartupError('OWNER_IDENTITY_UNAVAILABLE');
 try { writeFileSync(lockPath, JSON.stringify({ ...identity, launchId }), { flag: 'wx' }); }
 catch (error) { if (error.code === 'EEXIST') process.exit(0); throw error; }
 process.on('SIGINT', () => { stopping = true; }); process.on('SIGTERM', () => { stopping = true; });
+if (process.argv.includes('--parent-pipe')) {
+  process.stdin.on('end', () => { stopping = true; });
+  process.stdin.on('error', () => { stopping = true; });
+  process.stdin.resume();
+}
 try {
   const results = await Promise.all([
     supervise({ prepare: () => prepare(serviceRecord('api')), launch: () => launch('API'), stopped, record: serviceRecord('api') }),
     supervise({ prepare: () => prepareWeb(serviceRecord('web')), launch: () => launch('WEB'), stopped, record: serviceRecord('web'), service: 'WEB' }),
   ]);
-  record({ ...workspaceState(services), state: stopped() ? 'STOPPED' : 'ERROR' });
+  record({ ...workspaceState(services), state: stopped() ? 'STOPPED' : 'ERROR', completed: true });
   process.exitCode = stopped() ? 0 : Math.max(...results);
 }
-finally { if (read(lockPath)?.launchId === launchId) unlinkSync(lockPath); }
+finally {
+  if (process.argv.includes('--parent-pipe')) process.stdin.destroy();
+  if (read(lockPath)?.launchId === launchId) {
+    removeOwnerFile();
+  }
+}

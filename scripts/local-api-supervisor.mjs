@@ -42,8 +42,8 @@ export function redactLog(text) {
     .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [CREDENTIAL]');
 }
 
-// Four launches at most (initial + three restarts). The scheduler does not add
-// another restart policy; a persistent failure requires a manual start/logon.
+// Four launches at most (initial + three restarts) per supervisor. The wrapper
+// does not ask the scheduler to restart a completed, exhausted service budget.
 export async function supervise({ prepare, launch, stopped, record, sleep = delay, maxRestarts = 3, service = 'API' }) {
   for (let attempt = 0; attempt <= maxRestarts; attempt++) {
     if (stopped()) { record({ state: 'STOPPED', attempt }); return 0; }
