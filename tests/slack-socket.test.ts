@@ -11,6 +11,14 @@ class Client implements SocketClient {
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const event = (ack: (payload?: unknown) => Promise<void> = vi.fn(async () => undefined), type = 'slash_commands') => ({ envelope_id: 'envelope-12345678', type, body: { command: '/ai-pixel', text: '상태' }, ack });
+
+test('empty arguments are acknowledged as the default status query after persistence', async () => {
+  const client = new Client(), ack = vi.fn(async (_payload?: unknown) => undefined);
+  const receiver = new SlackSocketReceiver('secret', async () => undefined, undefined, () => client);
+  client.emit('slack_event', { ...event(ack), body: { command: '/ai-pixel', text: '' } }); await settle();
+  expect(ack).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('추가 인수가 없어 기본 상태 조회') }));
+  await receiver.stop();
+});
 test('ACK follows durable intake; receiver exposes only safe health and reconnects', async () => {
   const client = new Client(), order: string[] = [], receive = vi.fn(async () => { order.push('persist'); });
   const receiver = new SlackSocketReceiver('never-log-token', receive, undefined, () => client); receiver.start(); await settle();

@@ -55,9 +55,11 @@ export class SlackSocketReceiver {
     this.active += 1;
     try {
       if (!event.body || typeof event.body !== 'object' || Array.isArray(event.body) || Buffer.byteLength(JSON.stringify(event.body)) > 262_144) throw new IntegrationError('PAYLOAD_INVALID');
-      await this.receive(event.envelope_id, event.body as Record<string, unknown>);
+      const body = event.body as Record<string, unknown>;
+      await this.receive(event.envelope_id, body);
       // Receipt is durable before ACK. Task creation and channel reply are queued.
-      await ack({ response_type: 'ephemeral', text: '접수했습니다. 처리 결과와 업무 상세 링크를 지정 채널로 보냅니다. 자동 실행·수락·merge·배포는 하지 않습니다.' });
+      const emptyArguments = typeof body.text === 'string' && !body.text.trim();
+      await ack({ response_type: 'ephemeral', text: `${emptyArguments ? '추가 인수가 없어 기본 상태 조회를 접수했습니다.' : '접수했습니다.'} 처리 결과와 업무 상세 링크를 지정 채널로 보냅니다. 자동 실행·수락·merge·배포는 하지 않습니다.` });
       this.update({ lastReceivedAt: new Date().toISOString(), errorCode: null });
     } catch (error) {
       const denied = error instanceof IntegrationError && error.status < 500;

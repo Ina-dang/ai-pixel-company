@@ -9,10 +9,11 @@ import { workflowView, type WorkflowRow } from './workflows.js';
 import { slackDashboardLink, slackLabel, slackTaskReport } from './slack-report.js';
 export { slackDashboardLink } from './slack-report.js';
 
-export type SlackCommand = { kind: 'HELP' | 'STATUS' | 'TASK'; original?: string };
+export type SlackCommand = { kind: 'HELP' | 'STATUS' | 'TASK'; original?: string; defaulted?: true };
 export function parseSlackCommand(text: unknown): SlackCommand {
   if (typeof text !== 'string' || text.length > 20020 || containsSecret(text)) throw new IntegrationError('SLACK_COMMAND_INVALID', 400);
-  if (!text.trim() || /^(?:help|도움말)\s*$/i.test(text)) return { kind: 'HELP' };
+  if (!text.trim()) return { kind: 'STATUS', defaulted: true };
+  if (/^(?:help|도움말)\s*$/i.test(text)) return { kind: 'HELP' };
   if (/^(?:status|상태)\s*$/i.test(text)) return { kind: 'STATUS' };
   const match = /^(?:task|업무)[ \t]([\s\S]+)$/i.exec(text);
   if (match?.[1].trim() && match[1].length <= 20000) return { kind: 'TASK', original: match[1] };
@@ -63,7 +64,7 @@ export class SlackCommands {
           const runs = await tx<WorkflowRow[]>`select * from workflow_runs where organization_id=${receipt.organization_id} and project_id=${receipt.project_id} and task_id=${task.id} order by created_at desc,id desc limit 1`;
           reports.push(slackTaskReport({ projectId: receipt.project_id, projectName, task, run: runs[0] ? workflowView(runs[0]) : undefined }));
         }
-        result = { text: `*업무 현황 · ${slackLabel(projectName, 80)}*\n${counts.map(row => `${taskLabels[row.status]}: ${row.count}`).join(' / ') || '등록된 업무 없음'}\n\n${reports.join('\n\n') || `다음 할 일 · /ai-pixel 업무 <원문>으로 업무를 등록해 주세요.\n${slackDashboardLink(receipt.project_id)}`}\n최근 업무 최대 3건입니다. 전체 목록은 상세 화면에서 확인하세요. 실행·수락·merge·배포는 이 조회로 시작하지 않습니다.` };
+        result = { text: `${command.defaulted ? '추가 인수가 없어 기본 상태 조회로 처리했습니다.\n' : ''}*업무 현황 · ${slackLabel(projectName, 80)}*\n${counts.map(row => `${taskLabels[row.status]}: ${row.count}`).join(' / ') || '등록된 업무 없음'}\n\n${reports.join('\n\n') || `다음 할 일 · /ai-pixel 업무 <원문>으로 업무를 등록해 주세요.\n${slackDashboardLink(receipt.project_id)}`}\n최근 업무 최대 3건입니다. 전체 목록은 상세 화면에서 확인하세요. 실행·수락·merge·배포는 이 조회로 시작하지 않습니다.` };
       } else result = { text: `/ai-pixel 상태 — 서버 업무 상태 조회\n/ai-pixel 업무 <원문> — 할 일 등록 (자동 실행 없음)\n/ai-pixel 도움말 — 명령 안내\n${slackDashboardLink(receipt.project_id)}\n프로젝트·업무 선택 → 우측 상세에서 결과·변경 파일·검증·커밋 확인 → 수락 여부 결정. 실행·merge·배포는 자동으로 시작하지 않습니다.` };
       await tx`update integration_inbox set status='PROCESSED',result=${tx.json(result)},reply_status='PENDING',updated_at=now() where id=${receipt.id}`;
       await tx`insert into audit_logs(id,organization_id,project_id,actor_type,actor_id,action,target_type,target_id,request_id,outcome,metadata)

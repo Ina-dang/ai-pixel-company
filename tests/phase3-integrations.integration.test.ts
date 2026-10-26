@@ -413,6 +413,18 @@ async function enableSocket() {
 }
 const socketBody = (changes: Record<string, unknown> = {}) => ({ api_app_id: 'A123', team_id: 'T123', channel_id: 'C123', user_id: 'U123', command: '/ai-pixel', text: '업무 소켓 원문  공백 보존', trigger_id: 'slack-trigger-12345678', response_url: 'https://hooks.slack.com/commands/response-secret', token: 'legacy-verification-secret', ...changes });
 describe('Socket Mode durable intake', () => {
+  test('empty arguments persist a marked STATUS and reply with project status without changing work', async () => {
+    await enableSocket();
+    const before = JSON.stringify({ tasks: await database.sql`select id,status,version from tasks order by id`, runs: await database.sql`select id,status,version from workflow_runs order by id` });
+    await service.receiveSocketCommand(slackId, 1, 'envelope-12345678', socketBody({ text: '' }));
+    const row = (await database.sql`select payload from integration_inbox where provider='SLACK'`)[0];
+    expect(row.payload.command).toEqual({ kind: 'STATUS', defaulted: true });
+    await service.processOnce(); await service.processOnce();
+    expect(slackMessages).toHaveLength(1);
+    expect(slackMessages[0].text).toContain('업무 현황');
+    expect(slackMessages[0].text).toContain('추가 인수가 없어 기본 상태 조회');
+    expect(JSON.stringify({ tasks: await database.sql`select id,status,version from tasks order by id`, runs: await database.sql`select id,status,version from workflow_runs order by id` })).toBe(before);
+  });
   test('same Slack trigger retried in another envelope creates one TODO, never a run or a second reply', async () => {
     await enableSocket(); const first = await service.receiveSocketCommand(slackId, 1, 'envelope-12345678', socketBody());
     const retry = await service.receiveSocketCommand(slackId, 1, 'envelope-87654321', socketBody()); expect(first.duplicate).toBe(false); expect(retry.duplicate).toBe(true);

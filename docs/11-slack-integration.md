@@ -2,6 +2,18 @@
 
 ## Socket Mode 로컬 수신
 
+### 상태 조회의 빈 인수 처리 · 2026-10-26
+
+기존 공통 파서는 `text`가 비어 있으면 HELP로 분류했다. 명시적인 `상태`/`status`는 STATUS로 처리했지만 일반적인 접수 ACK만 보여줘 사용자는 어떤 동작이 접수됐는지 구분하기 어려웠다. 과거 inbox에는 원문 인수를 저장하지 않아 과거 HELP가 빈 값이었는지 소급 확정하지 않는다.
+
+- 빈 문자열/공백만 있는 인수는 이제 `{kind:'STATUS', defaulted:true}`로 저장하고 읽기 전용 업무 현황을 반환한다. `/ai-pixel`만 보내도 상태 조회가 된다. 명시적인 `상태`/`status`에는 defaulted 표시를 붙이지 않는다.
+- 접수 ACK와 실제 결과에 “추가 인수가 없어 기본 상태 조회”를 표시한다. `도움말`/`help`는 계속 HELP이며 업무 원문·공백 보존, 권한 검사, 중복 처리, 승인·실행 경계는 유지한다. 인수 원문·토큰·response_url을 새로 저장하지 않는다.
+- [Slack 공식 문서](https://docs.slack.dev/interactivity/implementing-slash-commands/)의 command/text 구분을2026-10-26 확인했다(개별 변경일 미공개). 앱의 같은 `/ai-pixel` 설정·권한을 사용하고 새 설치·유료 서비스는 추가하지 않는다.
+- 최초 재현 테스트는 빈 인수의 HELP 분류3건과 일반 ACK1건이 실패했다. 수정 후 파서7개·Socket7개·연동/권한/중복43개·보고11개, 합계68개가 통과했다. Node22.23.4로 검증했으며 lint·typecheck·build 통과다. 다른 미커밋 작업의 lint 정보1건은 수정하지 않았다.
+- 실제 Chrome Slack 작성기에서 `도움말 | 상태 | 업무 <원문>`는 자동완성 사용법 안내이며 입력 인수가 아닌 것을 확인했다. `/ai-pixel`의 첫 Enter는 자동완성 선택, 다음 Enter는 빈 인수 전송이었다. 과거 사용자의 입력 동작까지 소급 확정하지는 않는다.
+- 실제 검증2건: 작성기에 `/ai-pixel 상태`가 입력된 것을 확인한 뒤 전송한 receipt `2d33657d-a31b-44a6-afbb-2dd0c0d411c5`는 STATUS/defaulted 없음, `/ai-pixel`만 전송한 `a43a8427-bec3-4eb9-9de7-462319bfb231`는 STATUS/defaulted=true였다. 둘 다 SOCKET·PROCESSED·SENT이고 실제 Slack 조회에서도 업무 현황(승인 대기1/할 일3)과 상세 링크를 확인했다. [명시적 상태 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792997270521379), [빈 인수 기본 상태 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1792997337987519).
+- 실제 시험 전후 조직 전체 업무·실행/turn·merge·외부 작업의 상태/버전 해시가 같았다. 실제 inbox 주입이나 webhook 재생을 하지 않았고, 직원 실행·업무 등록·수락·merge·운영 배포·새 유료 자원을 사용하지 않았다. 기존 미커밋 작업은 수정/커밋 범위에서 제외한다. 전체 회귀와 기존 Whisper 실패 재검사는 이번 범위에서 실행하지 않았다.
+
 ### Windows 로그인 자동 실행
 
 #### 재부팅 종료와 복구 보강 · 2026-10-21
