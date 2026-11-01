@@ -62,8 +62,7 @@ function Owned-Task {
   if ($task) {
     $principalId = $task.Principal.UserId
     if (!$principalId.StartsWith('S-1-')) { $principalId = ([Security.Principal.NTAccount]::new($principalId)).Translate([Security.Principal.SecurityIdentifier]).Value }
-    $expectedArguments = "-NoProfile -NonInteractive -WindowStyle Hidden -File `"$PSCommandPath`" -Action Run -NodePath `""
-    if ($task.Description -ne $description -or $principalId -ne $currentUser -or $task.Principal.RunLevel -ne 'Limited' -or $task.Principal.LogonType -ne 'Interactive' -or $task.Actions.Count -ne 1 -or $task.Actions[0].Execute -ne (Join-Path $PSHOME 'powershell.exe') -or !$task.Actions[0].Arguments.StartsWith($expectedArguments)) { throw 'TASK_IDENTITY_MISMATCH' }
+    if ($task.Description -ne $description -or $principalId -ne $currentUser -or $task.Principal.RunLevel -ne 'Limited' -or $task.Principal.LogonType -ne 'Interactive' -or $task.Actions.Count -ne 1 -or !(Test-LocalStartupAction $task.Actions[0] $PSCommandPath)) { throw 'TASK_IDENTITY_MISMATCH' }
   }
   return $task
 }
@@ -126,13 +125,13 @@ switch ($Action) {
   'Install' {
     if (!$NodePath) { $NodePath = (Get-Command node.exe).Source }
     $NodePath = [IO.Path]::GetFullPath($NodePath)
-    if (!(Test-Path -LiteralPath $NodePath -PathType Leaf) -or $NodePath.Contains('"')) { throw 'NODE_PATH_INVALID' }
+    if (!(Test-Path -LiteralPath $NodePath -PathType Leaf) -or $NodePath -match '["%\r\n]' -or [IO.Path]::GetFileName($NodePath) -ine 'node.exe') { throw 'NODE_PATH_INVALID' }
     if (!(Test-Path -LiteralPath (Join-Path $projectRoot '.local\runtime.json'))) { throw 'LOCAL_CONFIG_MISSING' }
     $existing = Owned-Task
     if ($existing -and $existing.State -eq 'Running') { throw 'STOP_BEFORE_REINSTALL' }
-    $powerShell = Join-Path $PSHOME 'powershell.exe'
-    $arguments = "-NoProfile -NonInteractive -WindowStyle Hidden -File `"$PSCommandPath`" -Action Run -NodePath `"$NodePath`""
-    $taskAction = New-ScheduledTaskAction -Execute $powerShell -Argument $arguments -WorkingDirectory $projectRoot
+    $launch = Get-LocalStartupAction $PSCommandPath $NodePath
+    if (!(Test-Path -LiteralPath $launch.Execute -PathType Leaf) -or !(Test-Path -LiteralPath ([IO.Path]::ChangeExtension($PSCommandPath, '.vbs')) -PathType Leaf)) { throw 'HIDDEN_LAUNCHER_MISSING' }
+    $taskAction = New-ScheduledTaskAction -Execute $launch.Execute -Argument $launch.Arguments -WorkingDirectory $projectRoot
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
     $trigger.Delay = 'PT20S'
     $recoveryTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval ([TimeSpan]::FromMinutes(1))

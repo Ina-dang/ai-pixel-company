@@ -1,5 +1,36 @@
 import { expect, test } from 'vitest';
-import { redactLog, sameProcessOwner, StartupError, supervise, waitUntil, webBuildReady, workspaceState } from '../scripts/local-api-supervisor.mjs';
+import { redactLog, sameProcessOwner, startLocalDatabase, StartupError, supervise, waitUntil, webBuildReady, workspaceState } from '../scripts/local-api-supervisor.mjs';
+
+test('existing database with matching pinned image starts without registry-cache recreation', async () => {
+  const calls: string[][] = [], pinned = `postgres:18-alpine@sha256:${'a'.repeat(64)}`;
+  const code = await startLocalDatabase(async (args: string[]) => {
+    calls.push(args);
+    return { code: 0, output: args.includes('ps') ? 'b'.repeat(64) : args.includes('config') || args[0] === 'inspect' ? pinned : '' };
+  });
+  expect(code).toBe(0);
+  expect(calls.at(-1)).toEqual(['compose', '--env-file', '.local/compose.env', 'start', '--wait', '--wait-timeout', '90', 'postgres']);
+  expect(calls.some(args => args.includes('up') || args.includes('pull'))).toBe(false);
+});
+
+test.each(['missing', 'mismatched', 'unpinned', 'inspection-failed'])('database %s keeps the pinned no-download provisioning path', async scenario => {
+  const calls: string[][] = [], pinned = `postgres:18-alpine@sha256:${'a'.repeat(64)}`;
+  const code = await startLocalDatabase(async (args: string[]) => {
+    calls.push(args);
+    return { code: args[0] === 'inspect' && scenario === 'inspection-failed' ? 1 : 0,
+      output: args.includes('ps') ? scenario === 'missing' ? '' : 'b'.repeat(64)
+        : args.includes('config') ? scenario === 'unpinned' ? 'postgres:18-alpine' : pinned
+          : args[0] === 'inspect' ? scenario === 'mismatched' ? 'other-image' : pinned : '' };
+  });
+  expect(code).toBe(0);
+  expect(calls.at(-1)).toEqual(['compose', '--env-file', '.local/compose.env', 'up', '-d', '--pull', 'never', '--no-build', '--wait', '--wait-timeout', '90', 'postgres']);
+  expect(calls.some(args => args.includes('start'))).toBe(false);
+});
+
+test('existing database readiness failure propagates without recreation or downloads', async () => {
+  const pinned = `postgres:18-alpine@sha256:${'a'.repeat(64)}`;
+  expect(await startLocalDatabase(async (args: string[]) => ({ code: args.includes('start') ? 1 : 0,
+    output: args.includes('ps') ? 'b'.repeat(64) : pinned }))).toBe(1);
+});
 
 test('readiness waits through delayed Docker startup and respects a bounded timeout', async () => {
   let time = 0, checks = 0;

@@ -16,6 +16,15 @@
 
 ### Windows 로그인 자동 실행
 
+#### 터미널 창과 로컬 수신 복구 · 2026-11-01
+
+- 수신 API는 PC가 켜져 있는 동안 유지해야 Socket Mode 명령을 받을 수 있다. 업무 접수와 직원 실행은 별개이며, 현재 Slack 업무 등록은 TODO만 만든다. 꺼진 PC/API를 Slack 또는 배포된 화면이 깨우는 기능은 구현되어 있지 않다.
+- 기존 작업은 서버 종료/복구 차단 뒤에도 매분 콘솔 프로그램 PowerShell을 직접 호출했다. `-WindowStyle Hidden`만으로 시작 시 잠깐 나타나는 콘솔을 막기 어려운 Windows 동작은 [PowerShell 공식 이슈](https://github.com/PowerShell/PowerShell/issues/3028)에 기록되어 있다(열람 2026-11-01). 현재 작업에는 GUI 호스트 `wscript.exe //B //Nologo` → 전용 로컬 VBS → PowerShell 숨김 시작을 적용했다. [Microsoft wscript 문서](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wscript)(문서 갱신 2023-05-22, 열람 2026-11-01)의 batch 모드로 오류/입력 대화상자도 차단한다. 호스트는 자식 종료를 기다리고 종료 코드를 전달하므로 IgnoreNew·중지·기존 부모 파이프를 유지한다. 이 PC의 실제 스크립트 엔진 실행을 검증했으며, 엔진이 없는 다른 PC는 별도 확인이 필요하다.
+- 작업 신원 검사는 같은 사용자·Limited·Interactive·프로젝트의 정확한 기존/신규 action만 인정한다. PowerShell 7에서 관리 명령을 호출해도 Windows PowerShell의 고정 경로를 기준으로 검사한다. 기존에 수정된 다른 관리 동작은 보존했다.
+- 실제 서버는 2026-10-29 `DATABASE_NOT_READY` 이후 한도 종료 상태였다. 2026-11-01 DB 접속/컨테이너는 정상이었지만 `compose up --pull never`가 로컬 이미지 참조 부재로 실패했다. Compose가 선택한 기존 postgres 컨테이너와 설정의 고정 digest 이미지가 일치하면 `compose start --wait`로 재사용한다. 불일치/부재 시에만 기존 no-download/no-build `up` 경로를 사용한다. 이미지 다운로드·DB 초기화/삭제는 하지 않았다.
+- 검증: 관련 테스트26개·lint·typecheck·build PASS(lint 기존 informational 1건, 빌드는 캐시). 실제 새 작업 action을 차단 상태에서 두 번 실행해 종료 코드0/0·복구 및 runtime 파일 불변을 확인했다. 이후 로컬 수신 복구 시 감독57004·API56084·웹44452, RUNNING/attempt0을 관측했다. 데스크톱/390px 모바일 읽기 전용 검사에서 Socket CONNECTED·기존 명령17건·시험 업무 TODO/실행0·원문 hash·페이지 오류0·업무 쓰기0을 확인했다. 최초 샌드박스 내 OS 접근 테스트2개 실패는 OS 접근 허용 후 통과했고, 추가 함수 타입 선언 누락은 수정했다. 재부팅 뒤 시각적 창 미노출과 새로운 실제 Slack 명령 발신은 이번 검사와 별개다.
+- 후속 실제 수신(같은 날): 창 없는 작업을 계속 실행한 상태에서 Chrome의 기존 비공개 #ai-pixel-test 작성기에 `/ai-pixel 상태`를 입력·전송했다. receipt `6a8a18e8-0104-4646-89dd-af1112ffaa4d`는 `STATUS`(기본값 아님)·SOCKET·PROCESSED·SENT이며, [18:16 상태 응답](https://w1787572331-9ym425019.slack.com/archives/C0CAEGXQ5LL/p1793524586214729)의 승인 대기1/할 일3을 UI·DB·별도 Slack 조회로 대조했다. 업무·실행·merge·외부 작업 상태/버전 해시는 전후 동일했고 새 수신 기록만1건 추가됐다. 실행 중 wscript/PowerShell의 MainWindowHandle은0이었다. 실제 재부팅 이후 창 미노출은 아직 검증하지 않았다. 로컬 화면 증거는 Git 제외 `.local/browser-evidence/consoleless-slack-status-20261101.png`다.
+
 #### 재부팅 종료와 복구 보강 · 2026-10-21
 
 - 첫 실제 재부팅: 부팅 `2026-10-21T11:14:14.500Z`, 로그인 작업 시작 `11:20:00Z`, 마지막 runtime은 WAITING_DOCKER/WAITING_API였다. 확인 때 작업은 Ready, 두 포트는 닫혔고 마지막 결과는 `3221225786 = 0xC000013A`였다. [Microsoft NTSTATUS](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55)의 STATUS_CONTROL_C_EXIT에 해당한다(열람 2026-10-21, 해당 항목 변경일 미확인). 코드의 의미와 실제 종료를 유발한 주체는 구분한다. 당시 TaskScheduler Operational 이력이 꺼져 있어 직접 원인은 확정하지 못했다.

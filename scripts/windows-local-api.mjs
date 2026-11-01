@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, appendF
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { StartupError, redactLog, sameProcessOwner, supervise, waitUntil, webBuildReady, workspaceState } from './local-api-supervisor.mjs';
+import { StartupError, redactLog, sameProcessOwner, startLocalDatabase, supervise, waitUntil, webBuildReady, workspaceState } from './local-api-supervisor.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const area = resolve(root, '.local/windows-api'), launchId = randomUUID();
@@ -31,11 +31,14 @@ process.once('uncaughtExceptionMonitor', error => {
 function command(args, timeout = 15_000) {
   return new Promise(resolveCommand => {
     const dockerPath = resolve(process.env.ProgramFiles ?? 'C:/Program Files', 'Docker/Docker/resources/bin/docker.exe');
-    const child = spawn(dockerPath, args, { cwd: root, windowsHide: true, stdio: 'ignore' });
+    const child = spawn(dockerPath, args, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     let done = false;
-    const finish = code => { if (done) return; done = true; clearTimeout(timer); resolveCommand(code); };
+    let output = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => { output = (output + chunk).slice(0, 65536); });
+    const finish = code => { if (done) return; done = true; clearTimeout(timer); resolveCommand({ code, output }); };
     const timer = setTimeout(() => { child.kill(); finish(1); }, timeout);
-    child.on('error', () => finish(1)); child.on('exit', code => finish(code ?? 1));
+    child.on('error', () => finish(1)); child.on('close', code => finish(code ?? 1));
   });
 }
 
@@ -63,10 +66,10 @@ function logStream(stream, service) {
 async function prepare(report) {
   if (!existsSync(resolve(root, '.local/runtime.json')) || !existsSync(resolve(root, '.local/compose.env'))) throw new StartupError('LOCAL_CONFIG_MISSING');
   report({ state: 'WAITING_DOCKER' });
-  if (!await waitUntil(async () => await command(['info', '--format', '{{.ServerVersion}}']) === 0, { timeoutMs: 180_000, intervalMs: 5000, stopped })) throw new StartupError('DOCKER_NOT_READY');
+  if (!await waitUntil(async () => (await command(['info', '--format', '{{.ServerVersion}}'])).code === 0, { timeoutMs: 180_000, intervalMs: 5000, stopped })) throw new StartupError('DOCKER_NOT_READY');
   report({ state: 'WAITING_DATABASE' });
   // Existing pinned image/volume only. Never download an image, build, or reset data at logon.
-  if (await command(['compose', '--env-file', '.local/compose.env', 'up', '-d', '--pull', 'never', '--no-build', '--wait', '--wait-timeout', '90', 'postgres'], 100_000) !== 0) throw new StartupError('DATABASE_NOT_READY');
+  if (await startLocalDatabase(command) !== 0) throw new StartupError('DATABASE_NOT_READY');
 }
 
 async function portAvailable(port) {

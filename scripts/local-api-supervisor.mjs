@@ -9,6 +9,23 @@ export function sameProcessOwner(saved, observed) {
     && saved.pid === observed.pid && typeof saved.createdAt === 'string' && saved.createdAt === observed.createdAt);
 }
 
+export async function startLocalDatabase(command) {
+  const compose = ['compose', '--env-file', '.local/compose.env'];
+  const existing = await command([...compose, 'ps', '-a', '-q', 'postgres']);
+  const id = existing.output.trim();
+  if (existing.code === 0 && /^[a-f0-9]{12,64}$/.test(id)) {
+    const expected = await command([...compose, 'config', '--images', 'postgres']);
+    const observed = await command(['inspect', '--format', '{{.Config.Image}}', id]);
+    // Reuse only this Compose project's service with the exact pinned image.
+    // Starting an existing container does not need its registry reference to
+    // remain in the local image cache, unlike `compose up`.
+    if (expected.code === 0 && observed.code === 0 && /@sha256:[a-f0-9]{64}$/.test(expected.output.trim()) && expected.output.trim() === observed.output.trim()) {
+      return (await command([...compose, 'start', '--wait', '--wait-timeout', '90', 'postgres'], 100_000)).code;
+    }
+  }
+  return (await command([...compose, 'up', '-d', '--pull', 'never', '--no-build', '--wait', '--wait-timeout', '90', 'postgres'], 100_000)).code;
+}
+
 export function webBuildReady(buildId, routes) {
   if (typeof buildId !== 'string' || !buildId.trim() || buildId.length > 200 || !routes?.rewrites) return false;
   const rewrite = routes.rewrites;

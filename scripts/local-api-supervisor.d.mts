@@ -1,6 +1,7 @@
 export class StartupError extends Error { code: string; constructor(code: string); }
 export function redactLog(text: string): string;
 export function sameProcessOwner(saved: unknown, observed: unknown): boolean;
+export function startLocalDatabase(command: (args: string[], timeout?: number) => Promise<{ code: number; output: string }>): Promise<number>;
 export function webBuildReady(buildId: unknown, routes: unknown): boolean;
 export function workspaceState(services: { api: Record<string, unknown>; web: Record<string, unknown> }): {
   state: string; apiPid: unknown; webPid: unknown; attempt: unknown; services: { api: Record<string, unknown>; web: Record<string, unknown> };
